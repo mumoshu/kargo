@@ -8,6 +8,18 @@ By "indirect", it means `kargo` can let ArgoCD deploy your application using kus
 Further more, it is able to generate a continuous deployment workflow for CodeBuild and GitHub Actions, so that the target system can deploy your application via
 the CI/CD system of your choice.
 
+## Usage
+
+`kargo` has three commands, `kargo plan`, `kargo apply`, and `kargo export`.
+
+`plan` outputs the diff between the current state and the desired state of your application deployment, so that you can review changes before they are applied.
+
+`apply` runs the deployment`
+
+`export` is used to generate the worfklow definitions for the CI/CD system of your choice, so that the system can run `kargo plan` on each commit or pull request sync, and `apply` on each merge or commit to the main branch.
+
+## Configuration
+
 The below is the reference configuration that covers all the required and optional fields available for this provider:
 
 ```yaml
@@ -62,11 +74,3 @@ argocd:
   # Note that the config management plugin definition in the configmap
   # and the --config-management-plugin flag passed to argocd-app-create # command is auto-generated.
 ```
-
-`kargo` has three commands, `kargo plan`, `kargo apply`, and `kargo export`.
-
-`plan` outputs the diff between the current state and the desired state of your application deployment, so that you can review changes before they are applied.
-
-`apply` runs the deployment`
-
-`export` is used to generate the worfklow definitions for the CI/CD system of your choice, so that the system can run `kargo plan` on each commit or pull request sync, and `apply` on each merge or commit to the main branch.

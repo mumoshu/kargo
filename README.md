@@ -1,6 +1,6 @@
 # kargo
 
-`kargo` is a command-line application to deploy your Kubernetes application in various ways directly or indirectly.
+`kargo` is a command-line application to deploy your Kubernetes application directly and indirectly.
 
 By "direct", it means `kargo` is able to deploy the app by directly calling popular commands like `kubectl`, `kustomize`, `helm`, `kompose`.
 

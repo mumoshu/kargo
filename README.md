@@ -30,7 +30,7 @@ env:
   value: prod
 - name: FOO
   valueFrom: component_name.foo
-# kustomize instructs kanvas to deploy the app using `kustomize`.
+# kustomize instructs kargo to deploy the app using `kustomize`.
 # It has two major modes. The first mode directly calls `kustomize`, whereas
 # the second indirectly call it via `argocd`.
 # The first mode is triggered by setting only `helm`.
@@ -38,7 +38,7 @@ env:
 kustomize:
   # kustomize.image maps to --kustomize-image of argocd-app-create.
   image:
-# helm instructs kanvas to deploy the app using `helm`.
+# helm instructs kargo to deploy the app using `helm`.
 # It has two major modes. The first mode directly calls `helm`, whereas
 # the second indirectly call it via `argocd`.
 # The first mode is triggered by setting only `helm`.
@@ -62,15 +62,29 @@ argocd:
   repo: github.com/myorg/myrepo.git
   # argocd.path maps to --path of argocd-app-create.
   # Note: In case you had kubernetes.dir along with argocd.path,
-  # kanvas automatically git-push the content of dir to $argocd_repo/$argocd_path.
+  # kargo automatically git-push the content of dir to $argocd_repo/$argocd_path.
   # To opt-out of it, set `push: false`.
   path: path/to/dir/in/repo
   # --dir-recurse
   dirRecurse: true
   # --dest-namespace
   namespace: default
-  # serverFrom maps to --dest-server where the flag value is take from the output of another kanvas component
+  # serverFrom maps to --dest-server where the flag value is take from the output of another kargo component
   serverFrom: component_name.k8s_endpoint
   # Note that the config management plugin definition in the configmap
   # and the --config-management-plugin flag passed to argocd-app-create # command is auto-generated.
 ```
+
+## Deploying to multiple environments
+
+`kargo` does not have a "environments" concept or any feature related to that.
+It's intentionally out of the scope of this project to keep it simple.
+
+However, you can still support multiple environments just by creating one `kargo.yaml` per environment.
+
+Let's suppose you are deploying to two environments, `production` and `preview.
+You start by creating `production.kargo.yaml` and `preview.kargo.yaml`.
+
+When you want `kargo` to deploy to a specific environment, just give the corresponding `kargo` config file via the `-f` flag.
+
+That is, you'll run `kargo` like `kargo -f production.kargo.yaml apply` for a production deployment, whereas it would be `kargo -f preview.kargo.yaml apply` for a preview deployment.

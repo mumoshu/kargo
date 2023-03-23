@@ -41,4 +41,23 @@ func TestGenerate_ComposeApply(t *testing.T) {
 			},
 		}, cmds)
 	})
+
+	t.Run("plan", func(t *testing.T) {
+		cmds, err := g.ExecCmds(c, kargo.Plan)
+
+		require.NoError(t, err)
+
+		require.Equal(t, []kargo.Cmd{
+			{
+				Name: "docker",
+				Args: []string{
+					"compose",
+					"-f",
+					"docker-compose.yml",
+					"convert",
+				},
+				Dir: "testdata/compose",
+			},
+		}, cmds)
+	})
 }

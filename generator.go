@@ -169,7 +169,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return []Cmd{composeUp}, nil
 		case Plan:
 			composeConv := Cmd{
-				Name: "compose",
+				Name: "docker",
 				Args: convArgs,
 				Dir:  dir,
 			}

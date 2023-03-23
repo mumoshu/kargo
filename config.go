@@ -6,6 +6,11 @@ import (
 )
 
 const (
+	// FieldTagKargo is used to defining kargo flags.
+	// Currently, this is used to exclude the field from the field-to-flag conversion.
+	// Example: Name `yaml:"name" kargo:""`
+	FieldTagKargo = "kargo"
+
 	// FieldTagArgoCD is used to defining helm-upgrade flags
 	FieldTagCompose   = "compose"
 	FieldTagHelm      = "helm"
@@ -48,6 +53,7 @@ func (e Env) FlagValue(get GetValue) (string, error) {
 }
 
 type Compose struct {
+	EnableVals bool `yaml:"enableVals" kargo:""`
 }
 
 type Kompose struct {

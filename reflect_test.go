@@ -14,6 +14,7 @@ type config struct {
 	Baz    string
 	AFrom  string `flag1:"a"`
 	B      string `flag1:""`
+	C      string `kargo:""`
 }
 
 func (c config) AppendArgs(args []string, get GetValue, key string) (*[]string, error) {

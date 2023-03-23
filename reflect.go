@@ -89,6 +89,12 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		return args, nil
 	}
 
+	if f, ok := field.Tag.Lookup(FieldTagKargo); ok && f == "" {
+		// In case it's explicitly set to empty,
+		// the intent is to not include this field into args at all.
+		return args, nil
+	}
+
 	var v string
 
 	if t, ok := value.Interface().(flagValueProvider); ok {
@@ -115,12 +121,14 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		}
 	}
 
-	items := strings.Split(flagAndOpts, ",")
-	if len(items) == 2 && items[1] == "arg" {
-		return append(args, items[1]), nil
-	}
+	if flagAndOpts != "" {
+		items := strings.Split(flagAndOpts, ",")
+		if len(items) == 2 && items[1] == "arg" {
+			return append(args, items[1]), nil
+		}
 
-	flag = items[0]
+		flag = items[0]
+	}
 
 	return append(args, fmt.Sprintf("--%s=%s", flag, v)), nil
 }

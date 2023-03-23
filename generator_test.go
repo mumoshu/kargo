@@ -52,6 +52,23 @@ func TestGenerate_Compose(t *testing.T) {
 		})
 	})
 
+	t.Run("apply with logs", func(t *testing.T) {
+		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
+			g.TailLogs = true
+		}, []kargo.Cmd{
+			{
+				Name: "docker",
+				Args: []string{
+					"compose",
+					"-f",
+					"docker-compose.yml",
+					"up",
+				},
+				Dir: "testdata/compose",
+			},
+		})
+	})
+
 	t.Run("plan", func(t *testing.T) {
 		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false

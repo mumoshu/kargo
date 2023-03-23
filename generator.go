@@ -151,19 +151,30 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 		}
 
 		composeArgs := append([]string{"compose", "-f", file}, args...)
-		upArgs := append([]string{}, composeArgs...)
-		upArgs = append(upArgs, "up")
+
+		upArgs := []string{"up"}
 		if !g.TailLogs {
 			upArgs = append(upArgs, "-d")
 		}
+
 		convArgs := append([]string{}, composeArgs...)
 		convArgs = append(convArgs, "convert")
 
 		switch t {
 		case Apply:
+			if c.Compose.EnableVals {
+				return []Cmd{
+					{
+						Name: "vals",
+						Args: append([]string{"exec", "--stream-yaml", file, "--", "docker", "compose", "-f", "-"}, upArgs...),
+						Dir:  dir,
+					},
+				}, nil
+			}
+
 			composeUp := Cmd{
 				Name: "docker",
-				Args: upArgs,
+				Args: append(append([]string{}, composeArgs...), upArgs...),
 				Dir:  dir,
 			}
 			return []Cmd{composeUp}, nil

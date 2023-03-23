@@ -85,4 +85,46 @@ func TestGenerate_Compose(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("apply with vals", func(t *testing.T) {
+		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
+			g.TailLogs = false
+			c.Compose.EnableVals = true
+		}, []kargo.Cmd{
+			{
+				Name: "vals",
+				Args: []string{
+					"exec",
+					"--stream-yaml",
+					"docker-compose.yml",
+					"--",
+					"docker",
+					"compose",
+					"-f",
+					"-",
+					"up",
+					"-d",
+				},
+				Dir: "testdata/compose",
+			},
+		})
+	})
+
+	t.Run("plan with vals", func(t *testing.T) {
+		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
+			g.TailLogs = false
+			c.Compose.EnableVals = true
+		}, []kargo.Cmd{
+			{
+				Name: "docker",
+				Args: []string{
+					"compose",
+					"-f",
+					"docker-compose.yml",
+					"convert",
+				},
+				Dir: "testdata/compose",
+			},
+		})
+	})
 }

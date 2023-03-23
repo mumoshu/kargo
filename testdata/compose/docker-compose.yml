@@ -1,0 +1,8 @@
+services:
+  web:
+    ports:
+    - "8080:80"
+    environment:
+    - FOO=foo
+    image: nginx
+    command: nginx -g "daemon off;"

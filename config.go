@@ -7,6 +7,7 @@ import (
 
 const (
 	// FieldTagArgoCD is used to defining helm-upgrade flags
+	FieldTagCompose   = "compose"
 	FieldTagHelm      = "helm"
 	FieldTagKustomize = "kustomize"
 	FieldTagKompose   = "kompose"

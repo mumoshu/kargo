@@ -16,6 +16,8 @@ type Generator struct {
 	// TempDir is the directory to write kustomize-build output
 	// for use by kubectl-apply.
 	TempDir string
+	// TailLogs is set to true if you want kargo to tail the logs
+	TailLogs bool
 }
 
 type Target int
@@ -134,6 +136,46 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 		args []string
 		err  error
 	)
+
+	if c.Compose != nil {
+		args, err = AppendArgs(args, c.Compose, g.GetValue, FieldTagCompose)
+		if err != nil {
+			return nil, err
+		}
+
+		dir := c.Path
+		file := "docker-compose.yml"
+		if strings.HasSuffix(dir, ".yml") {
+			file = filepath.Base(dir)
+			dir = filepath.Dir(dir)
+		}
+
+		composeArgs := append([]string{"compose", "-f", file}, args...)
+		upArgs := append([]string{}, composeArgs...)
+		upArgs = append(upArgs, "up")
+		if !g.TailLogs {
+			upArgs = append(upArgs, "-d")
+		}
+		convArgs := append([]string{}, composeArgs...)
+		convArgs = append(convArgs, "convert")
+
+		switch t {
+		case Apply:
+			composeUp := Cmd{
+				Name: "docker",
+				Args: upArgs,
+				Dir:  dir,
+			}
+			return []Cmd{composeUp}, nil
+		case Plan:
+			composeConv := Cmd{
+				Name: "compose",
+				Args: convArgs,
+				Dir:  dir,
+			}
+			return []Cmd{composeConv}, nil
+		}
+	}
 
 	if c.Helm != nil {
 		args, err = AppendArgs(args, c.Helm, g.GetValue, FieldTagHelm)

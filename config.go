@@ -57,6 +57,7 @@ type Compose struct {
 }
 
 type Kompose struct {
+	EnableVals bool `yaml:"enableVals" kargo:""`
 }
 
 type Kustomize struct {

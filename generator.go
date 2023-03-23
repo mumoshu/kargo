@@ -255,36 +255,100 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return nil, err
 		}
 
-		tmpFile := filepath.Join(g.TempDir, "kompose-converted.yaml")
-
-		komposeConvertArgs := []string{"convert", "--output=" + tmpFile}
-		if c.Path != "" {
-			komposeConvertArgs = append(komposeConvertArgs, "-f="+filepath.Join(c.Path, "docker-compose.yaml"))
-		}
-		komposeConvertArgs = append(komposeConvertArgs, args...)
-
-		komposeConvert := Cmd{
-			Name: "kompose",
-			Args: komposeConvertArgs,
+		dir := c.Path
+		file := "docker-compose.yml"
+		if strings.HasSuffix(dir, ".yml") {
+			file = filepath.Base(dir)
+			dir = filepath.Dir(dir)
 		}
 
-		kubectlArgs := []string{"-f", tmpFile, "--server-side=true"}
-
-		kubectlDiff := Cmd{
-			Name: "kubectl",
-			Args: append([]string{"diff"}, kubectlArgs...),
+		komposeConvertArgs := func(f, out string) []string {
+			komposeConvertArgs := []string{"convert"}
+			if out != "" {
+				komposeConvertArgs = append(komposeConvertArgs, "--output="+out)
+			} else {
+				komposeConvertArgs = append(komposeConvertArgs, "--stdout")
+			}
+			if c.Path != "" {
+				komposeConvertArgs = append(komposeConvertArgs, "-f", f)
+			}
+			komposeConvertArgs = append(komposeConvertArgs, args...)
+			return komposeConvertArgs
 		}
 
-		kubectlApply := Cmd{
-			Name: "kubectl",
-			Args: append([]string{"apply"}, kubectlArgs...),
+		kubectlArgs := func(f string) []string {
+			return []string{"--server-side", "-f", f}
+		}
+
+		tailArgs := func() string {
+			if g.TailLogs {
+				return " && stern -l kompose.io.service!="
+			}
+			return ""
 		}
 
 		switch t {
 		case Apply:
-			return []Cmd{komposeConvert, kubectlApply}, nil
+			if c.Kompose.EnableVals {
+				script := append([]string{"kompose"}, komposeConvertArgs(
+					"-",
+					"",
+				)...)
+				script = append(script, "|", "kubectl", "apply")
+				script = append(script, kubectlArgs("-")...)
+				args := []string{
+					"exec",
+					"--stream-yaml",
+					file,
+					"--",
+					"bash",
+					"-c",
+					strings.Join(script, " ") + tailArgs(),
+				}
+				return []Cmd{
+					{
+						Name: "vals",
+						Args: args,
+						Dir:  dir,
+					},
+				}, nil
+			}
+
+			script := append([]string{"kompose"}, komposeConvertArgs(
+				file,
+				"",
+			)...)
+			script = append(script, "|", "kubectl", "apply")
+			script = append(script, kubectlArgs("-")...)
+			args := []string{
+				"-c",
+				strings.Join(script, " ") + tailArgs(),
+			}
+			return []Cmd{
+				{
+					Name: "bash",
+					Args: args,
+					Dir:  dir,
+				},
+			}, nil
 		case Plan:
-			return []Cmd{komposeConvert, kubectlDiff}, nil
+			script := append([]string{"kompose"}, komposeConvertArgs(
+				file,
+				"",
+			)...)
+			script = append(script, "|", "kubectl", "diff")
+			script = append(script, kubectlArgs("-")...)
+			args := []string{
+				"-c",
+				strings.Join(script, " "),
+			}
+			return []Cmd{
+				{
+					Name: "bash",
+					Args: args,
+					Dir:  dir,
+				},
+			}, nil
 		}
 	} else {
 		path := "."

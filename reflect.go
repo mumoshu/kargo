@@ -107,6 +107,16 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		return appendArgs(args, value.Interface(), get, tagKey)
 	} else if value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Struct {
 		return appendArgs(args, value.Elem().Interface(), get, tagKey)
+	} else if value.Kind() == reflect.Slice {
+		var err error
+		for i := 0; i < value.Len(); i++ {
+			v := value.Index(i)
+			args, err = appendReflectedArgs(args, v, field, get, tagKey)
+			if err != nil {
+				return nil, fmt.Errorf("field %s: %w", field.Name, err)
+			}
+		}
+		return args, nil
 	} else {
 		v = fmt.Sprintf("%v", value.Interface())
 

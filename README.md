@@ -5,18 +5,20 @@
 By "direct", it means `kargo` is able to deploy the app by directly calling popular commands like `kubectl`, `kustomize`, `helm`, `kompose`.
 
 By "indirect", it means `kargo` can let ArgoCD deploy your application using kustomize/helm/kompose by setting up ArgoCD on behalf of you.
-Further more, it is able to generate a continuous deployment workflow for CodeBuild and GitHub Actions, so that the target system can deploy your application via
-the CI/CD system of your choice.
+
+Everyone in your team is able to trigger deployments via `kargo`, no matter which Kubernetes deployment tool you or your teammate is using. That's the benefit of introducing `kargo` into your environment.
+
+If you're a part of the platform team, you'll probably want to
+encourage or enforce use of `kargo`, so that you can standardize
+deployments without forcing your team to use kubectl/kustomize/helm/argocd.
 
 ## Usage
 
-`kargo` has three commands, `kargo plan`, `kargo apply`, and `kargo export`.
+`kargo` has two commands, `kargo plan` and `kargo apply`.
 
 `plan` outputs the diff between the current state and the desired state of your application deployment, so that you can review changes before they are applied.
 
 `apply` runs the deployment`
-
-`export` is used to generate the worfklow definitions for the CI/CD system of your choice, so that the system can run `kargo plan` on each commit or pull request sync, and `apply` on each merge or commit to the main branch.
 
 ## Configuration
 

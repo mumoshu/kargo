@@ -15,6 +15,7 @@ type config struct {
 	AFrom  string `flag1:"a"`
 	B      string `flag1:""`
 	C      string `kargo:""`
+	Bool1  bool   `flag1:"bool1"`
 }
 
 func (c config) AppendArgs(args []string, get GetValue, key string) (*[]string, error) {
@@ -39,11 +40,11 @@ func TestAppendArgs(t *testing.T) {
 	}
 
 	t.Run("ok/unknown", func(t *testing.T) {
-		check(t, ok, getValue, "unknown", []string{"--foobar=123", "--baz=456", "--afrom=OK", "--b=b"}, nil)
+		check(t, ok, getValue, "unknown", []string{"--foobar=123", "--baz=456", "--afrom=OK", "--b=b", "--bool1=false"}, nil)
 	})
 
 	t.Run("ok/flag1", func(t *testing.T) {
-		check(t, ok, getValue, "flag1", []string{"--foo-bar=123", "--baz=456", "--a=OK"}, nil)
+		check(t, ok, getValue, "flag1", []string{"--foo-bar=123", "--baz=456", "--a=OK", "--bool1=false"}, nil)
 	})
 
 	t.Run("ok/flag2", func(t *testing.T) {

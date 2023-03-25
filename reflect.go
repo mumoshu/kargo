@@ -105,7 +105,7 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 			return nil, err
 		}
 	} else {
-		v = fmt.Sprintf("%s", value.Interface())
+		v = fmt.Sprintf("%v", value.Interface())
 
 		if v == "" {
 			return args, nil

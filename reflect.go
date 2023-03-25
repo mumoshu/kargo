@@ -137,7 +137,7 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 	if flagAndOpts != "" {
 		items := strings.Split(flagAndOpts, ",")
 		if len(items) == 2 && items[1] == "arg" {
-			return append(args, items[1]), nil
+			return append(args, v), nil
 		}
 
 		flag = items[0]

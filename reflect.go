@@ -36,18 +36,17 @@ func AppendArgs(args []string, i any, get GetValue, key string) ([]string, error
 }
 
 func appendArgs(args []string, i any, get GetValue, tagKey string) ([]string, error) {
-	tpe := reflect.TypeOf(i)
+	tpeOfStruct := reflect.TypeOf(i)
+	valOfStruct := reflect.ValueOf(i)
 
-	if tpe.Kind() == reflect.Pointer {
-		tpe = tpe.Elem()
+	if tpeOfStruct.Kind() == reflect.Pointer {
+		tpeOfStruct = tpeOfStruct.Elem()
+		valOfStruct = reflect.ValueOf(i).Elem()
 	}
 
-	if tpe.Kind() != reflect.Struct {
-		return nil, errorf("expected Struct but got %s", tpe.Kind())
+	if tpeOfStruct.Kind() != reflect.Struct {
+		return nil, errorf("expected Struct but got %s", tpeOfStruct.Kind())
 	}
-
-	tpeOfStruct := tpe
-	valOfStruct := reflect.ValueOf(i).Elem()
 
 	for i := 0; i < tpeOfStruct.NumField(); i++ {
 		tpeOfField := tpeOfStruct.Field(i)
@@ -104,6 +103,10 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		if err != nil {
 			return nil, err
 		}
+	} else if value.Kind() == reflect.Struct {
+		return appendArgs(args, value.Interface(), get, tagKey)
+	} else if value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Struct {
+		return appendArgs(args, value.Elem().Interface(), get, tagKey)
 	} else {
 		v = fmt.Sprintf("%v", value.Interface())
 

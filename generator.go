@@ -1,6 +1,7 @@
 package kargo
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -47,7 +48,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		err  error
 	)
 
-	args, err = AppendArgs(args, c.ArgoCD, g.GetValue, FieldTagArgoCD)
+	args, err = AppendArgs(args, c, g.GetValue, FieldTagArgoCD)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +63,8 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		if err != nil {
 			return nil, err
 		}
+	} else if c.Compose != nil {
+		return nil, fmt.Errorf("compose is not supported with argocd")
 	}
 
 	path := "."
@@ -107,8 +110,15 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		}
 	}
 
-	pluginName := fmt.Sprintf("%s-%s", c.ArgoCD.Namespace, c.Name)
-	args = append(args, "--config-management-plugin="+pluginName)
+	var pluginName string
+	if c.ArgoCD.ConfigManagementPlugin != "" {
+		pluginName = c.ArgoCD.ConfigManagementPlugin
+	} else if c.Kompose != nil {
+		pluginName = "kargo"
+	}
+	if pluginName != "" {
+		args = append(args, "--config-management-plugin="+pluginName)
+	}
 	// create or update the config manangement plugin configmap
 	// with the generated ConfigManagementPlugin data.
 	// and if not yet done so, patch the argocd repo server with the updated configmap
@@ -125,10 +135,40 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		return append([]Cmd{}, cmds...), nil
 	}
 
-	argocdAppCreateArgs := append([]string{"app", "create"}, args...)
-	argocdAppCreate := Cmd{Name: "argocd", Args: argocdAppCreateArgs}
+	var image string
+	if c.ArgoCD.Image != "" {
+		image = c.ArgoCD.Image
+	} else if c.ArgoCD.ImageFrom != "" {
+		image, err = g.GetValue(c.ArgoCD.ImageFrom)
+		if err != nil {
+			return nil, fmt.Errorf("unable to obtain argocd.ImageFrom: %v", err)
+		}
+	}
+	if image != "" {
+		args = append(args, "--image", image)
+	}
 
-	return append([]Cmd{argocdAppCreate}, cmds...), nil
+	if len(args) > 1 {
+		var script []string
+
+		script = append(script, append([]string{"argocd", "app", "create"}, args...)...)
+		script = append(script, ";")
+		script = append(script, append([]string{"argocd", "app", "set"}, args...)...)
+
+		if g.TailLogs {
+			script = append(script, ";")
+			script = append(script, "argocd", "app", "logs", c.Name, "--follow", "--tail=-1")
+		}
+
+		cmds = append(cmds, Cmd{
+			Name: "bash",
+			Args: []string{"-c", strings.Join(script, " ")},
+		})
+	} else {
+		return nil, errors.New("unable to generate argocd commands: specify argocd fields in your config")
+	}
+
+	return cmds, nil
 }
 
 func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {

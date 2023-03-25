@@ -118,7 +118,13 @@ type ArgoCD struct {
 	// - git-commit
 	// - git-push
 	// so that it triggers the deployment.
-	Push bool `yaml:"push", argocd:""`
+	Push bool `yaml:"push" argocd:""`
+	// Image is the image to be used for the deployment.
+	Image string `yaml:"image" kargo:""`
+	// ImageFrom is the key to be used to get the image from the environment.
+	ImageFrom string `yaml:"imageFrom" kargo:""`
+	// ConfigManagementPlugin is the config management plugin to be used.
+	ConfigManagementPlugin string `yaml:"configManagementPlugin" argocd:"config-management-plugin"`
 }
 
 type GetValue func(key string) (string, error)

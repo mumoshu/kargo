@@ -44,22 +44,22 @@ func (g *Generator) ExecCmds(c *Config, t Target) ([]Cmd, error) {
 
 func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	var (
-		args []string
+		args *Args
 		err  error
 	)
 
-	args, err = AppendArgs(args, c, g.GetValue, FieldTagArgoCD)
+	args, err = AppendArgs(args, c, FieldTagArgoCD)
 	if err != nil {
 		return nil, err
 	}
 
 	if c.Helm != nil {
-		args, err = AppendArgs(args, c.Helm, g.GetValue, FieldTagArgoCD)
+		args, err = AppendArgs(args, c.Helm, FieldTagArgoCD)
 		if err != nil {
 			return nil, err
 		}
 	} else if c.Kustomize != nil {
-		args, err = AppendArgs(args, c.Kustomize, g.GetValue, FieldTagArgoCD)
+		args, err = AppendArgs(args, c.Kustomize, FieldTagArgoCD)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		pluginName = "kargo"
 	}
 	if pluginName != "" {
-		args = append(args, "--config-management-plugin="+pluginName)
+		args = args.Append("--config-management-plugin=" + pluginName)
 	}
 	// create or update the config manangement plugin configmap
 	// with the generated ConfigManagementPlugin data.
@@ -145,15 +145,15 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		}
 	}
 	if image != "" {
-		args = append(args, "--image", image)
+		args = args.Append("--image", image)
 	}
 
-	if len(args) > 1 {
+	if args.Len() > 1 {
 		var script []string
 
-		script = append(script, append([]string{"argocd", "app", "create"}, args...)...)
+		script = append(script, append([]string{"argocd", "app", "create"}, args.MustCollect(g.GetValue)...)...)
 		script = append(script, ";")
-		script = append(script, append([]string{"argocd", "app", "set"}, args...)...)
+		script = append(script, append([]string{"argocd", "app", "set"}, args.MustCollect(g.GetValue)...)...)
 
 		if g.TailLogs {
 			script = append(script, ";")
@@ -173,12 +173,12 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 
 func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 	var (
-		args []string
+		args *Args
 		err  error
 	)
 
 	if c.Compose != nil {
-		args, err = AppendArgs(args, c.Compose, g.GetValue, FieldTagCompose)
+		args, err = AppendArgs(args, c.Compose, FieldTagCompose)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			dir = filepath.Dir(dir)
 		}
 
-		composeArgs := append([]string{"compose", "-f", file}, args...)
+		composeArgs := append([]string{"compose", "-f", file}, args.MustCollect(g.GetValue)...)
 
 		upArgs := []string{"up"}
 		if !g.TailLogs {
@@ -229,14 +229,14 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 	}
 
 	if c.Helm != nil {
-		args, err = AppendArgs(args, c.Helm, g.GetValue, FieldTagHelm)
+		args, err = AppendArgs(args, c.Helm, FieldTagHelm)
 		if err != nil {
 			return nil, err
 		}
 
 		repo := filepath.Base(c.Helm.Repo)
 		helmRepoAdd := Cmd{Name: "helm", Args: []string{"repo", "add", repo, c.Helm.Repo}}
-		helmUpgradeArgs := append([]string{"upgrade", "--install", c.Name, repo + "/" + c.Helm.Chart}, args...)
+		helmUpgradeArgs := append([]string{"upgrade", "--install", c.Name, repo + "/" + c.Helm.Chart}, args.MustCollect(g.GetValue)...)
 
 		switch t {
 		case Apply:
@@ -248,14 +248,14 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return []Cmd{helmRepoAdd, helmDiff}, nil
 		}
 	} else if c.Kustomize != nil {
-		args, err = AppendArgs(args, c.Kustomize, g.GetValue, FieldTagKustomize)
+		args, err = AppendArgs(args, c.Kustomize, FieldTagKustomize)
 		if err != nil {
 			return nil, err
 		}
 
 		kustomizeEdit := Cmd{
 			Name: "kustomize",
-			Args: append([]string{"edit", "set", "image"}, args...),
+			Args: append([]string{"edit", "set", "image"}, args.MustCollect(g.GetValue)...),
 			Dir:  c.Path,
 		}
 
@@ -290,7 +290,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return []Cmd{kustomizeEdit, kustomizeBuild, kubectlDiff}, nil
 		}
 	} else if c.Kompose != nil {
-		args, err = AppendArgs(args, c.Kompose, g.GetValue, FieldTagKustomize)
+		args, err = AppendArgs(args, c.Kompose, FieldTagKustomize)
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +312,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			if c.Path != "" {
 				komposeConvertArgs = append(komposeConvertArgs, "-f", f)
 			}
-			komposeConvertArgs = append(komposeConvertArgs, args...)
+			komposeConvertArgs = append(komposeConvertArgs, args.MustCollect(g.GetValue)...)
 			return komposeConvertArgs
 		}
 

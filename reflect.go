@@ -16,26 +16,30 @@ type flagValueProvider interface {
 type argsAppender interface {
 	// AppendArgs produces the arguments for the command
 	// to plan and apply the configuration.
-	AppendArgs(args []string, get GetValue, key string) (*[]string, error)
+	AppendArgs(args *Args, key string) (*Args, error)
 }
 
-func AppendArgs(args []string, i any, get GetValue, key string) ([]string, error) {
+func AppendArgs(args *Args, i any, key string) (*Args, error) {
+	if args == nil {
+		args = &Args{}
+	}
+
 	t, ok := i.(argsAppender)
 	if ok {
-		result, err := t.AppendArgs(args, get, key)
+		result, err := t.AppendArgs(args, key)
 		if err != nil {
 			return nil, err
 		}
 
 		if result != nil {
-			return *result, nil
+			return result, nil
 		}
 	}
 
-	return appendArgs(args, i, get, key)
+	return appendArgs(args, i, key)
 }
 
-func appendArgs(args []string, i any, get GetValue, tagKey string) ([]string, error) {
+func appendArgs(args *Args, i any, tagKey string) (*Args, error) {
 	tpeOfStruct := reflect.TypeOf(i)
 	valOfStruct := reflect.ValueOf(i)
 
@@ -54,7 +58,7 @@ func appendArgs(args []string, i any, get GetValue, tagKey string) ([]string, er
 
 		var err error
 
-		args, err = appendReflectedArgs(args, valOfField, tpeOfField, get, tagKey)
+		args, err = appendReflectedArgs(args, valOfField, tpeOfField, tagKey)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +67,7 @@ func appendArgs(args []string, i any, get GetValue, tagKey string) ([]string, er
 	return args, nil
 }
 
-func appendReflectedArgs(args []string, value reflect.Value, field reflect.StructField, get GetValue, tagKey string) ([]string, error) {
+func appendReflectedArgs(args *Args, value reflect.Value, field reflect.StructField, tagKey string) (*Args, error) {
 	if value.Kind() == reflect.Pointer {
 		if value.IsNil() {
 			return args, nil
@@ -74,7 +78,7 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 
 	t, ok := value.Interface().(argsAppender)
 	if ok {
-		return AppendArgs(args, t, get, tagKey)
+		return AppendArgs(args, t, tagKey)
 	}
 
 	var flag string
@@ -94,24 +98,19 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		return args, nil
 	}
 
-	var v string
+	var v interface{}
 
 	if t, ok := value.Interface().(flagValueProvider); ok {
-		var err error
-
-		v, err = t.FlagValue(get)
-		if err != nil {
-			return nil, err
-		}
+		v = t
 	} else if value.Kind() == reflect.Struct {
-		return appendArgs(args, value.Interface(), get, tagKey)
+		return appendArgs(args, value.Interface(), tagKey)
 	} else if value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Struct {
-		return appendArgs(args, value.Elem().Interface(), get, tagKey)
+		return appendArgs(args, value.Elem().Interface(), tagKey)
 	} else if value.Kind() == reflect.Slice {
 		var err error
 		for i := 0; i < value.Len(); i++ {
 			v := value.Index(i)
-			args, err = appendReflectedArgs(args, v, field, get, tagKey)
+			args, err = appendReflectedArgs(args, v, field, tagKey)
 			if err != nil {
 				return nil, fmt.Errorf("field %s: %w", field.Name, err)
 			}
@@ -125,23 +124,18 @@ func appendReflectedArgs(args []string, value reflect.Value, field reflect.Struc
 		}
 
 		if strings.HasSuffix(field.Name, "From") {
-			var err error
-
-			v, err = get(v)
-			if err != nil {
-				return nil, errorf("field %s: unable to get value: %w", field.Name, err)
-			}
+			v = DynArg{FromOutput: v.(string)}
 		}
 	}
 
 	if flagAndOpts != "" {
 		items := strings.Split(flagAndOpts, ",")
 		if len(items) == 2 && items[1] == "arg" {
-			return append(args, v), nil
+			return args.Add(v), nil
 		}
 
 		flag = items[0]
 	}
 
-	return append(args, fmt.Sprintf("--%s=%s", flag, v)), nil
+	return args.Add(fmt.Sprintf("--%s", flag)).Add(v), nil
 }

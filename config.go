@@ -66,7 +66,7 @@ type Kustomize struct {
 
 type KustomizeImages []KustomizeImage
 
-func (i KustomizeImages) AppendArgs(args []string, get GetValue, key string) (*[]string, error) {
+func (i KustomizeImages) AppendArgs(args []string, key string) (*[]string, error) {
 	var images []string
 	for _, img := range i {
 		var s string

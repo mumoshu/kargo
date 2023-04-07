@@ -44,7 +44,7 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse=false --config-management-plugin=kargo ; argocd app set test --directory-recurse=false --config-management-plugin=kargo",
+					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo",
 				},
 				Dir: "",
 			},
@@ -59,7 +59,7 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse=false --config-management-plugin=kargo ; argocd app set test --directory-recurse=false --config-management-plugin=kargo ; argocd app logs test --follow --tail=-1",
+					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo ; argocd app logs test --follow --tail=-1",
 				},
 				Dir: "",
 			},
@@ -82,7 +82,7 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse=false --config-management-plugin=kargo ; argocd app set test --directory-recurse=false --config-management-plugin=kargo",
+					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo",
 				},
 				Dir: "",
 			},

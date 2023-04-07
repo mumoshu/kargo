@@ -30,9 +30,9 @@ type Nested2 struct {
 	E string `flag1:"e"`
 }
 
-func (c config) AppendArgs(args *Args, key string) (*Args, error) {
+func (c config) KargoAppendArgs(args *Args, key string) (*Args, error) {
 	if key == "flag2" {
-		args = args.Append(fmt.Sprintf("--prefixed-%s=%s", "foobar", c.FooBar))
+		args = args.AppendStrings(fmt.Sprintf("--prefixed-%s=%s", "foobar", c.FooBar))
 		return args, nil
 	}
 

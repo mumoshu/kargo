@@ -8,15 +8,15 @@ import (
 
 var errorf = fmt.Errorf
 
-type flagValueProvider interface {
-	// FlagValue returns the value of the flag
-	FlagValue(get GetValue) (string, error)
+type KargoValueProvider interface {
+	// KargoValue returns the value of the flag
+	KargoValue(get GetValue) (string, error)
 }
 
-type argsAppender interface {
-	// AppendArgs produces the arguments for the command
+type KargoArgsAppender interface {
+	// KargoAppendArgs produces the arguments for the command
 	// to plan and apply the configuration.
-	AppendArgs(args *Args, key string) (*Args, error)
+	KargoAppendArgs(args *Args, key string) (*Args, error)
 }
 
 func AppendArgs(args *Args, i any, key string) (*Args, error) {
@@ -24,9 +24,9 @@ func AppendArgs(args *Args, i any, key string) (*Args, error) {
 		args = &Args{}
 	}
 
-	t, ok := i.(argsAppender)
+	t, ok := i.(KargoArgsAppender)
 	if ok {
-		result, err := t.AppendArgs(args, key)
+		result, err := t.KargoAppendArgs(args, key)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func appendReflectedArgs(args *Args, value reflect.Value, field reflect.StructFi
 		value = value.Elem()
 	}
 
-	t, ok := value.Interface().(argsAppender)
+	t, ok := value.Interface().(KargoArgsAppender)
 	if ok {
 		return AppendArgs(args, t, tagKey)
 	}
@@ -100,7 +100,7 @@ func appendReflectedArgs(args *Args, value reflect.Value, field reflect.StructFi
 
 	var v interface{}
 
-	if t, ok := value.Interface().(flagValueProvider); ok {
+	if t, ok := value.Interface().(KargoValueProvider); ok {
 		v = t
 	} else if value.Kind() == reflect.Struct {
 		return appendArgs(args, value.Interface(), tagKey)
@@ -131,11 +131,11 @@ func appendReflectedArgs(args *Args, value reflect.Value, field reflect.StructFi
 	if flagAndOpts != "" {
 		items := strings.Split(flagAndOpts, ",")
 		if len(items) == 2 && items[1] == "arg" {
-			return args.Add(v), nil
+			return args.Append(v), nil
 		}
 
 		flag = items[0]
 	}
 
-	return args.Add(fmt.Sprintf("--%s", flag)).Add(v), nil
+	return args.Append(fmt.Sprintf("--%s", flag)).Append(v), nil
 }

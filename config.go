@@ -40,7 +40,7 @@ type Env struct {
 	ValueFrom string `yaml:"valueFrom"`
 }
 
-func (e Env) FlagValue(get GetValue) (string, error) {
+func (e Env) KargoValue(get GetValue) (string, error) {
 	v := e.Value
 	if e.ValueFrom != "" {
 		var err error
@@ -66,7 +66,7 @@ type Kustomize struct {
 
 type KustomizeImages []KustomizeImage
 
-func (i KustomizeImages) AppendArgs(args []string, key string) (*[]string, error) {
+func (i KustomizeImages) KargoAppendArgs(args []string, key string) (*[]string, error) {
 	var images []string
 	for _, img := range i {
 		var s string
@@ -101,7 +101,7 @@ type Helm struct {
 	Set     []Set  `yaml:"set" helm:"set" argocd:"helm-set"`
 }
 
-func (s Set) FlagValue(get GetValue) (string, error) {
+func (s Set) KargoValue(get GetValue) (string, error) {
 	return fmt.Sprintf("%s=%s", s.Name, s.Value), nil
 }
 

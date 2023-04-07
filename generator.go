@@ -117,7 +117,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		pluginName = "kargo"
 	}
 	if pluginName != "" {
-		args = args.Append("--config-management-plugin=" + pluginName)
+		args = args.AppendStrings("--config-management-plugin=" + pluginName)
 	}
 	// create or update the config manangement plugin configmap
 	// with the generated ConfigManagementPlugin data.
@@ -145,7 +145,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		}
 	}
 	if image != "" {
-		args = args.Append("--image", image)
+		args = args.AppendStrings("--image", image)
 	}
 
 	if args.Len() > 1 {

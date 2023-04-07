@@ -11,18 +11,22 @@ type Args struct {
 	underlying []interface{}
 }
 
+func NewArgs(vs ...interface{}) *Args {
+	return &Args{underlying: vs}
+}
+
 func (a *Args) Len() int {
 	return len(a.underlying)
 }
 
-func (a *Args) Append(s ...string) *Args {
+func (a *Args) AppendStrings(s ...string) *Args {
 	for _, v := range s {
 		a.underlying = append(a.underlying, v)
 	}
 	return a
 }
 
-func (a *Args) Add(vs ...interface{}) *Args {
+func (a *Args) Append(vs ...interface{}) *Args {
 	for _, v := range vs {
 		v := v
 		a.underlying = append(a.underlying, v)
@@ -30,18 +34,18 @@ func (a *Args) Add(vs ...interface{}) *Args {
 	return a
 }
 
-func (a *Args) AddValueFromOutput(ref string) {
+func (a *Args) AppendValueFromOutput(ref string) {
 	a.underlying = append(a.underlying, DynArg{FromOutput: ref})
 }
 
-func (a *Args) Visit(str func(string), out func(string), flag func(flagValueProvider)) {
+func (a *Args) Visit(str func(string), out func(string), flag func(KargoValueProvider)) {
 	for _, x := range a.underlying {
 		switch a := x.(type) {
 		case string:
 			str(a)
 		case DynArg:
 			out(a.FromOutput)
-		case flagValueProvider:
+		case KargoValueProvider:
 			flag(a)
 		default:
 			panic(fmt.Sprintf("unexpected type(%T) of item: %q", a, a))
@@ -71,8 +75,8 @@ func (a *Args) Collect(get func(string) (string, error)) ([]string, error) {
 		}
 		args = append(args, v)
 		prev = s
-	}, func(fvp flagValueProvider) {
-		v, err := fvp.FlagValue(get)
+	}, func(fvp KargoValueProvider) {
+		v, err := fvp.KargoValue(get)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("after %s: %w", prev, err))
 			return
@@ -107,7 +111,7 @@ func (a *Args) String() string {
 		args = append(args, s)
 	}, func(s string) {
 		args = append(args, fmt.Sprintf("$(get %s)", s))
-	}, func(fvp flagValueProvider) {
+	}, func(fvp KargoValueProvider) {
 		args = append(args, fmt.Sprintf("%s", fvp))
 	})
 

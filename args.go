@@ -12,7 +12,7 @@ type Args struct {
 }
 
 func NewArgs(vs ...interface{}) *Args {
-	return &Args{underlying: vs}
+	return &Args{underlying: append([]interface{}{}, vs...)}
 }
 
 func (a *Args) Len() int {
@@ -27,6 +27,10 @@ func (a *Args) AppendStrings(s ...string) *Args {
 }
 
 func (a *Args) Append(vs ...interface{}) *Args {
+	if a == nil {
+		a = &Args{}
+	}
+
 	for _, v := range vs {
 		v := v
 		a.underlying = append(a.underlying, v)
@@ -47,6 +51,8 @@ func (a *Args) Visit(str func(string), out func(string), flag func(KargoValuePro
 			out(a.FromOutput)
 		case KargoValueProvider:
 			flag(a)
+		case *Args:
+			a.Visit(str, out, flag)
 		default:
 			panic(fmt.Sprintf("unexpected type(%T) of item: %q", a, a))
 		}

@@ -30,7 +30,7 @@ const (
 
 type Cmd struct {
 	Name string
-	Args []string
+	Args *Args
 	Dir  string
 }
 
@@ -77,13 +77,12 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	if c.ArgoCD.Push {
 		dir := strings.ReplaceAll(filepath.Base(c.ArgoCD.Repo), ".git", "")
 
-		gitCloneArgs := append([]string{"clone"}, c.ArgoCD.Repo, dir)
+		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, dir)
 		gitClone := Cmd{Name: "git", Args: gitCloneArgs}
-
-		cpArgs := append([]string{"-r"}, filepath.Join(path, "*"), dir)
+		cpArgs := NewArgs("-r", filepath.Join(path, "*"), dir)
 		cp := Cmd{Name: "cp", Args: cpArgs}
 
-		gitAddArgs := append([]string{"-c"},
+		gitAddArgs := NewArgs("-c",
 			fmt.Sprintf(
 				"cd %s && git add .",
 				dir,
@@ -91,12 +90,12 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		)
 		gitAdd := Cmd{Name: "bash", Args: gitAddArgs}
 
-		gitCommitPushArgs := append([]string{"-c"},
+		gitCommitPushArgs := NewArgs("-c",
 			"git commit -m 'automated commit' && git push",
 		)
 		gitCommitPush := Cmd{Name: "bash", Args: gitCommitPushArgs}
 
-		gitDiffArgs := append([]string{"-c"},
+		gitDiffArgs := NewArgs("-c",
 			"git diff",
 		)
 		gitDiff := Cmd{Name: "bash", Args: gitDiffArgs}
@@ -149,20 +148,22 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	}
 
 	if args.Len() > 1 {
-		var script []string
+		var script *Args
 
-		script = append(script, append([]string{"argocd", "app", "create"}, args.MustCollect(g.GetValue)...)...)
-		script = append(script, ";")
-		script = append(script, append([]string{"argocd", "app", "set"}, args.MustCollect(g.GetValue)...)...)
+		script = script.Append("argocd", "app", "create")
+		script = script.Append(args)
+		script = script.Append(";")
+		script = script.Append("argocd", "app", "set")
+		script = script.Append(args)
 
 		if g.TailLogs {
-			script = append(script, ";")
-			script = append(script, "argocd", "app", "logs", c.Name, "--follow", "--tail=-1")
+			script = script.Append(";")
+			script = script.Append("argocd", "app", "logs", c.Name, "--follow", "--tail=-1")
 		}
 
 		cmds = append(cmds, Cmd{
 			Name: "bash",
-			Args: []string{"-c", strings.Join(script, " ")},
+			Args: NewArgs("-c", NewBashScript(script)),
 		})
 	} else {
 		return nil, errors.New("unable to generate argocd commands: specify argocd fields in your config")
@@ -190,15 +191,15 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			dir = filepath.Dir(dir)
 		}
 
-		composeArgs := append([]string{"compose", "-f", file}, args.MustCollect(g.GetValue)...)
+		composeArgs := NewArgs("compose", "-f", file, args)
 
-		upArgs := []string{"up"}
+		upArgs := NewArgs("up")
 		if !g.TailLogs {
-			upArgs = append(upArgs, "-d")
+			upArgs = upArgs.Append("-d")
 		}
 
-		convArgs := append([]string{}, composeArgs...)
-		convArgs = append(convArgs, "convert")
+		convArgs := NewArgs().Append(composeArgs)
+		convArgs = convArgs.Append("convert")
 
 		switch t {
 		case Apply:
@@ -206,7 +207,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 				return []Cmd{
 					{
 						Name: "vals",
-						Args: append([]string{"exec", "--stream-yaml", file, "--", "docker", "compose", "-f", "-"}, upArgs...),
+						Args: NewArgs("exec", "--stream-yaml", file, "--", "docker", "compose", "-f", "-", upArgs),
 						Dir:  dir,
 					},
 				}, nil
@@ -214,7 +215,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 
 			composeUp := Cmd{
 				Name: "docker",
-				Args: append(append([]string{}, composeArgs...), upArgs...),
+				Args: NewArgs(composeArgs, upArgs),
 				Dir:  dir,
 			}
 			return []Cmd{composeUp}, nil
@@ -235,15 +236,15 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 		}
 
 		repo := filepath.Base(c.Helm.Repo)
-		helmRepoAdd := Cmd{Name: "helm", Args: []string{"repo", "add", repo, c.Helm.Repo}}
-		helmUpgradeArgs := append([]string{"upgrade", "--install", c.Name, repo + "/" + c.Helm.Chart}, args.MustCollect(g.GetValue)...)
+		helmRepoAdd := Cmd{Name: "helm", Args: NewArgs("repo", "add", repo, c.Helm.Repo)}
+		helmUpgradeArgs := NewArgs("upgrade", "--install", c.Name, repo+"/"+c.Helm.Chart, args)
 
 		switch t {
 		case Apply:
 			helmUpgrade := Cmd{Name: "helm", Args: helmUpgradeArgs}
 			return []Cmd{helmRepoAdd, helmUpgrade}, nil
 		case Plan:
-			helmDiffArgs := append([]string{"diff"}, helmUpgradeArgs...)
+			helmDiffArgs := NewArgs("diff", helmUpgradeArgs)
 			helmDiff := Cmd{Name: "helm", Args: helmDiffArgs}
 			return []Cmd{helmRepoAdd, helmDiff}, nil
 		}
@@ -255,15 +256,15 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 
 		kustomizeEdit := Cmd{
 			Name: "kustomize",
-			Args: append([]string{"edit", "set", "image"}, args.MustCollect(g.GetValue)...),
+			Args: NewArgs("edit", "set", "image", args),
 			Dir:  c.Path,
 		}
 
 		tmpFile := filepath.Join(g.TempDir, "kustomize-built.yaml")
 
-		kustomizeBuildArgs := []string{"build", "--output=" + tmpFile}
+		kustomizeBuildArgs := NewArgs("build", "--output="+tmpFile)
 		if c.Path != "" {
-			kustomizeBuildArgs = append(kustomizeBuildArgs, c.Path)
+			kustomizeBuildArgs = kustomizeBuildArgs.Append(c.Path)
 		}
 
 		kustomizeBuild := Cmd{
@@ -271,16 +272,16 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			Args: kustomizeBuildArgs,
 		}
 
-		kubectlArgs := []string{"-f", tmpFile, "--server-side=true"}
+		kubectlArgs := NewArgs("-f", tmpFile, "--server-side=true")
 
 		kubectlDiff := Cmd{
 			Name: "kubectl",
-			Args: append([]string{"diff"}, kubectlArgs...),
+			Args: NewArgs("diff", kubectlArgs),
 		}
 
 		kubectlApply := Cmd{
 			Name: "kubectl",
-			Args: append([]string{"apply"}, kubectlArgs...),
+			Args: NewArgs("apply", kubectlArgs),
 		}
 
 		switch t {
@@ -336,15 +337,15 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 				)...)
 				script = append(script, "|", "kubectl", "apply")
 				script = append(script, kubectlArgs("-")...)
-				args := []string{
+				args := NewArgs(
 					"exec",
 					"--stream-yaml",
 					file,
 					"--",
 					"bash",
 					"-c",
-					strings.Join(script, " ") + tailArgs(),
-				}
+					strings.Join(script, " ")+tailArgs(),
+				)
 				return []Cmd{
 					{
 						Name: "vals",
@@ -360,10 +361,10 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			)...)
 			script = append(script, "|", "kubectl", "apply")
 			script = append(script, kubectlArgs("-")...)
-			args := []string{
+			args := NewArgs(
 				"-c",
-				strings.Join(script, " ") + tailArgs(),
-			}
+				strings.Join(script, " ")+tailArgs(),
+			)
 			return []Cmd{
 				{
 					Name: "bash",
@@ -378,10 +379,10 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			)...)
 			script = append(script, "|", "kubectl", "diff")
 			script = append(script, kubectlArgs("-")...)
-			args := []string{
+			args := NewArgs(
 				"-c",
 				strings.Join(script, " "),
-			}
+			)
 			return []Cmd{
 				{
 					Name: "bash",
@@ -400,12 +401,12 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 
 		kubectlDiff := Cmd{
 			Name: "kubectl",
-			Args: append([]string{"diff"}, kubectlArgs...),
+			Args: NewArgs("diff", kubectlArgs),
 		}
 
 		kubectlApply := Cmd{
 			Name: "kubectl",
-			Args: append([]string{"apply"}, kubectlArgs...),
+			Args: NewArgs("apply", kubectlArgs),
 		}
 
 		switch t {

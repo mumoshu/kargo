@@ -9,7 +9,7 @@ import (
 )
 
 func TestGenerate_Kompose(t *testing.T) {
-	run := func(t *testing.T, targ kargo.Target, f func(fg *kargo.Generator, fc *kargo.Config), expected []kargo.Cmd) {
+	run := func(t *testing.T, targ kargo.Target, f func(fg *kargo.Generator, fc *kargo.Config), expected []cmd) {
 		t.Helper()
 
 		g := &kargo.Generator{
@@ -31,13 +31,21 @@ func TestGenerate_Kompose(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, expected, cmds)
+		var got []cmd
+		for _, c := range cmds {
+			got = append(got, cmd{
+				Name: c.Name,
+				Args: c.Args.MustCollect(g.GetValue),
+				Dir:  c.Dir,
+			})
+		}
+		require.Equal(t, expected, got)
 	}
 
 	t.Run("apply", func(t *testing.T) {
 		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
-		}, []kargo.Cmd{
+		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
@@ -52,7 +60,7 @@ func TestGenerate_Kompose(t *testing.T) {
 	t.Run("apply with logs", func(t *testing.T) {
 		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = true
-		}, []kargo.Cmd{
+		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
@@ -67,7 +75,7 @@ func TestGenerate_Kompose(t *testing.T) {
 	t.Run("plan", func(t *testing.T) {
 		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
-		}, []kargo.Cmd{
+		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
@@ -83,7 +91,7 @@ func TestGenerate_Kompose(t *testing.T) {
 		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
 			c.Kompose.EnableVals = true
-		}, []kargo.Cmd{
+		}, []cmd{
 			{
 				Name: "vals",
 				Args: []string{
@@ -104,7 +112,7 @@ func TestGenerate_Kompose(t *testing.T) {
 		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
 			c.Kompose.EnableVals = true
-		}, []kargo.Cmd{
+		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{

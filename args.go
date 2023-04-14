@@ -53,6 +53,10 @@ func (a *Args) Visit(str func(string), out func(string), flag func(KargoValuePro
 			flag(a)
 		case *Args:
 			a.Visit(str, out, flag)
+		case []string:
+			for _, s := range a {
+				str(s)
+			}
 		default:
 			panic(fmt.Sprintf("unexpected type(%T) of item: %q", a, a))
 		}

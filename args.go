@@ -42,13 +42,17 @@ func (a *Args) AppendValueFromOutput(ref string) {
 	a.underlying = append(a.underlying, DynArg{FromOutput: ref})
 }
 
-func (a *Args) Visit(str func(string), out func(string), flag func(KargoValueProvider)) {
+func (a *Args) AppendValueFromOutputWithPrefix(prefix, ref string) {
+	a.underlying = append(a.underlying, DynArg{Prefix: prefix, FromOutput: ref})
+}
+
+func (a *Args) Visit(str func(string), out func(DynArg), flag func(KargoValueProvider)) {
 	for _, x := range a.underlying {
 		switch a := x.(type) {
 		case string:
 			str(a)
 		case DynArg:
-			out(a.FromOutput)
+			out(a)
 		case KargoValueProvider:
 			flag(a)
 		case *Args:
@@ -77,14 +81,14 @@ func (a *Args) Collect(get func(string) (string, error)) ([]string, error) {
 	a.Visit(func(s string) {
 		args = append(args, s)
 		prev = s
-	}, func(s string) {
-		v, err := get(s)
+	}, func(a DynArg) {
+		v, err := get(a.FromOutput)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("after %s: %w", prev, err))
 			return
 		}
-		args = append(args, v)
-		prev = s
+		args = append(args, a.Prefix+v)
+		prev = a.FromOutput
 	}, func(fvp KargoValueProvider) {
 		v, err := fvp.KargoValue(get)
 		if err != nil {
@@ -119,8 +123,8 @@ func (a *Args) String() string {
 
 	a.Visit(func(s string) {
 		args = append(args, s)
-	}, func(s string) {
-		args = append(args, fmt.Sprintf("$(get %s)", s))
+	}, func(a DynArg) {
+		args = append(args, fmt.Sprintf("$(get %s with prefix %s)", a.FromOutput, a.Prefix))
 	}, func(fvp KargoValueProvider) {
 		args = append(args, fmt.Sprintf("%s", fvp))
 	})
@@ -128,6 +132,16 @@ func (a *Args) String() string {
 	return strings.Join(args, " ")
 }
 
+// DynArg is a dynamic argument that is resolved at runtime.
+// It is used to compose a command-line argument like --foo=$bar,
+// where $bar is a value of another kargo command.
 type DynArg struct {
+	// Prefix is a prefix to be prepended to the value of FromOutput.
+	// For example, Prefix=foo= and FromOutput=bar will result in foo=$bar.
+	// This is handy when you need to compose a command-line argument like --foo=$bar,
+	// instead of --foo bar.
+	Prefix string
+
+	// FromOutput is a reference to an output of another kargo command.
 	FromOutput string
 }

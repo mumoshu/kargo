@@ -51,12 +51,14 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
 			c.Name = "test"
 			g.TailLogs = false
+			c.ArgoCD.Project = "testproj"
+			c.ArgoCD.Server = "https://localhost:8080"
 		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo",
+					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo",
 				},
 				Dir: "",
 			},
@@ -66,12 +68,14 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 	t.Run("apply with logs", func(t *testing.T) {
 		run(t, kargo.Apply, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = true
+			c.ArgoCD.Project = "testproj"
+			c.ArgoCD.Server = "https://localhost:8080"
 		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo ; argocd app logs test --follow --tail=-1",
+					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app logs test --follow --tail=-1",
 				},
 				Dir: "",
 			},
@@ -89,12 +93,14 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 			g.TailLogs = false
 			c.Name = "test"
 			c.Kompose.EnableVals = true
+			c.ArgoCD.Project = "testproj"
+			c.ArgoCD.Server = "https://localhost:8080"
 		}, []cmd{
 			{
 				Name: "bash",
 				Args: []string{
 					"-c",
-					"argocd app create test --directory-recurse false --config-management-plugin=kargo ; argocd app set test --directory-recurse false --config-management-plugin=kargo",
+					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo",
 				},
 				Dir: "",
 			},

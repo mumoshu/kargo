@@ -44,22 +44,23 @@ func (g *Generator) ExecCmds(c *Config, t Target) ([]Cmd, error) {
 
 func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	var (
-		args *Args
-		err  error
+		args    *Args
+		appArgs *Args
+		err     error
 	)
 
-	args, err = AppendArgs(args, c, FieldTagArgoCD)
+	appArgs, err = AppendArgs(appArgs, c, FieldTagArgoCDApp)
 	if err != nil {
 		return nil, err
 	}
 
 	if c.Helm != nil {
-		args, err = AppendArgs(args, c.Helm, FieldTagArgoCD)
+		appArgs, err = AppendArgs(appArgs, c.Helm, FieldTagArgoCDApp)
 		if err != nil {
 			return nil, err
 		}
 	} else if c.Kustomize != nil {
-		args, err = AppendArgs(args, c.Kustomize, FieldTagArgoCD)
+		appArgs, err = AppendArgs(appArgs, c.Kustomize, FieldTagArgoCDApp)
 		if err != nil {
 			return nil, err
 		}
@@ -67,25 +68,28 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		return nil, fmt.Errorf("compose is not supported with argocd")
 	}
 
-	path := "."
-	if c.Path != "" {
-		path = c.Path
+	var path string
+	if c.ArgoCD.Path != "" {
+		path = c.ArgoCD.Path
 	}
 
 	var cmds []Cmd
 
 	if c.ArgoCD.Push {
-		dir := strings.ReplaceAll(filepath.Base(c.ArgoCD.Repo), ".git", "")
+		localRepoDir := strings.ReplaceAll(filepath.Base(c.ArgoCD.Repo), ".git", "")
 
-		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, dir)
+		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, localRepoDir)
 		gitClone := Cmd{Name: "git", Args: gitCloneArgs}
-		cpArgs := NewArgs("-r", filepath.Join(path, "*"), dir)
+
+		localConfigDir := filepath.Join(localRepoDir, path)
+
+		cpArgs := NewArgs("-r", filepath.Join(c.Path, "*"), localConfigDir)
 		cp := Cmd{Name: "cp", Args: cpArgs}
 
 		gitAddArgs := NewArgs("-c",
 			fmt.Sprintf(
 				"cd %s && git add .",
-				dir,
+				localRepoDir,
 			),
 		)
 		gitAdd := Cmd{Name: "bash", Args: gitAddArgs}
@@ -109,15 +113,6 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		}
 	}
 
-	var pluginName string
-	if c.ArgoCD.ConfigManagementPlugin != "" {
-		pluginName = c.ArgoCD.ConfigManagementPlugin
-	} else if c.Kompose != nil {
-		pluginName = "kargo"
-	}
-	if pluginName != "" {
-		args = args.AppendStrings("--config-management-plugin=" + pluginName)
-	}
 	// create or update the config manangement plugin configmap
 	// with the generated ConfigManagementPlugin data.
 	// and if not yet done so, patch the argocd repo server with the updated configmap
@@ -134,27 +129,133 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		return append([]Cmd{}, cmds...), nil
 	}
 
-	var image string
-	if c.ArgoCD.Image != "" {
-		image = c.ArgoCD.Image
-	} else if c.ArgoCD.ImageFrom != "" {
-		image, err = g.GetValue(c.ArgoCD.ImageFrom)
-		if err != nil {
-			return nil, fmt.Errorf("unable to obtain argocd.ImageFrom: %v", err)
+	{
+		var server string
+		if c.ArgoCD.Server != "" {
+			server = c.ArgoCD.Server
+		} else if c.ArgoCD.ServerFrom != "" {
+			server, err = g.GetValue(c.ArgoCD.ServerFrom)
+			if err != nil {
+				return nil, fmt.Errorf("unable to obtain argocd.ServerFrom: %v", err)
+			}
+		}
+		if server != "" {
+			args = args.AppendStrings("--server", server)
 		}
 	}
-	if image != "" {
-		args = args.AppendStrings("--image", image)
+
+	{
+		var username string
+		if c.ArgoCD.Username != "" {
+			username = c.ArgoCD.Username
+		} else if c.ArgoCD.UsernameFrom != "" {
+			username, err = g.GetValue(c.ArgoCD.UsernameFrom)
+			if err != nil {
+				return nil, fmt.Errorf("unable to obtain argocd.UsernameFrom: %v", err)
+			}
+		}
+		if username != "" {
+			args = args.AppendStrings("--username", username)
+		}
 	}
 
-	if args.Len() > 1 {
+	{
+		var password string
+		if c.ArgoCD.Password != "" {
+			password = c.ArgoCD.Password
+		} else if c.ArgoCD.PasswordFrom != "" {
+			password, err = g.GetValue(c.ArgoCD.PasswordFrom)
+			if err != nil {
+				return nil, fmt.Errorf("unable to obtain argocd.PasswordFrom: %v", err)
+			}
+		}
+		if password != "" {
+			args = args.AppendStrings("--password", password)
+		}
+	}
+
+	{
+		var insecure string
+		if c.ArgoCD.Insecure {
+			insecure = fmt.Sprintf("%v", c.ArgoCD.Insecure)
+		} else if c.ArgoCD.InsecureFrom != "" {
+			insecure, err = g.GetValue(c.ArgoCD.InsecureFrom)
+			if err != nil {
+				return nil, fmt.Errorf("unable to obtain argocd.InsecureFrom: %v", err)
+			}
+		}
+		if insecure != "" {
+			if insecure != "true" && insecure != "false" {
+				return nil, fmt.Errorf("invalid argocd.InsecureFrom value: %s", insecure)
+			}
+
+			args = args.AppendStrings("--insecure", insecure)
+		}
+	}
+
+	appArgs = appArgs.CopyFrom(args)
+	{
+		var pluginName string
+		if c.ArgoCD.ConfigManagementPlugin != "" {
+			pluginName = c.ArgoCD.ConfigManagementPlugin
+		} else if c.Kompose != nil {
+			pluginName = "kargo"
+		}
+		if pluginName != "" {
+			appArgs = appArgs.AppendStrings("--config-management-plugin=" + pluginName)
+		}
+
+		var image string
+		if c.ArgoCD.Image != "" {
+			image = c.ArgoCD.Image
+		} else if c.ArgoCD.ImageFrom != "" {
+			image, err = g.GetValue(c.ArgoCD.ImageFrom)
+			if err != nil {
+				return nil, fmt.Errorf("unable to obtain argocd.ImageFrom: %v", err)
+			}
+		}
+		if image != "" {
+			appArgs = appArgs.AppendStrings("--image", image)
+		}
+
+		if path != "" {
+			appArgs = appArgs.AppendStrings("--path", path)
+		}
+
+		if c.ArgoCD.Repo != "" {
+			appArgs = appArgs.AppendStrings("--repo", c.ArgoCD.Repo)
+		}
+
+		destNamespace := c.ArgoCD.DestNamespace
+		if destNamespace != "" {
+			appArgs = appArgs.AppendStrings("--dest-namespace", destNamespace)
+		}
+
+		destServer := c.ArgoCD.DestServer
+		if destServer != "" {
+			appArgs = appArgs.AppendStrings("--dest-server", destServer)
+		}
+
+		if c.ArgoCD.DirRecurse {
+			appArgs = appArgs.AppendStrings("--directory-recurse")
+		}
+	}
+
+	if args.Len() == 0 {
+		return nil, errors.New("unable to generate argocd commands: specify argocd connection-related fields in your config")
+	} else if appArgs.Len() == 0 {
+		return nil, errors.New("unable to generate argocd commands: specify argocd app-related fields in your config")
+	} else {
 		var script *Args
 
-		script = script.Append("argocd", "app", "create")
+		script = script.Append("argocd", "proj", "create", c.ArgoCD.Project)
 		script = script.Append(args)
 		script = script.Append(";")
+		script = script.Append("argocd", "app", "create")
+		script = script.Append(appArgs)
+		script = script.Append(";")
 		script = script.Append("argocd", "app", "set")
-		script = script.Append(args)
+		script = script.Append(appArgs)
 
 		if g.TailLogs {
 			script = script.Append(";")
@@ -165,8 +266,6 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 			Name: "bash",
 			Args: NewArgs("-c", NewBashScript(script)),
 		})
-	} else {
-		return nil, errors.New("unable to generate argocd commands: specify argocd fields in your config")
 	}
 
 	return cmds, nil

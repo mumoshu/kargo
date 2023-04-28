@@ -16,10 +16,26 @@ func NewArgs(vs ...interface{}) *Args {
 }
 
 func (a *Args) Len() int {
+	if a == nil {
+		return 0
+	}
 	return len(a.underlying)
 }
 
+func (a *Args) CopyFrom(other *Args) *Args {
+	if a == nil {
+		a = &Args{}
+	}
+	if other != nil {
+		a.underlying = append(a.underlying, other.underlying...)
+	}
+	return a
+}
+
 func (a *Args) AppendStrings(s ...string) *Args {
+	if a == nil {
+		a = &Args{}
+	}
 	for _, v := range s {
 		a.underlying = append(a.underlying, v)
 	}

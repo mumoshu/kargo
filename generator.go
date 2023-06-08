@@ -3,7 +3,9 @@ package kargo
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -29,6 +31,7 @@ const (
 )
 
 type Cmd struct {
+	ID   string
 	Name string
 	Args *Args
 	Dir  string
@@ -44,9 +47,13 @@ func (g *Generator) ExecCmds(c *Config, t Target) ([]Cmd, error) {
 
 func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	var (
-		args    *Args
-		appArgs *Args
-		err     error
+		args                       *Args
+		loginArgs                  *Args
+		appArgs                    *Args
+		awsEKSUpdateKubeconfigArgs *Args
+		clusterAddArgs             *Args
+		repoAddArgs                *Args
+		err                        error
 	)
 
 	appArgs, err = AppendArgs(appArgs, c, FieldTagArgoCDApp)
@@ -68,133 +75,81 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		return nil, fmt.Errorf("compose is not supported with argocd")
 	}
 
-	var path string
+	var (
+		remotePath *Args
+		cmds       []Cmd
+	)
+
 	if c.ArgoCD.Path != "" {
-		path = c.ArgoCD.Path
-	}
-
-	var cmds []Cmd
-
-	if c.ArgoCD.Push {
-		localRepoDir := strings.ReplaceAll(filepath.Base(c.ArgoCD.Repo), ".git", "")
-
-		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, localRepoDir)
-		gitClone := Cmd{Name: "git", Args: gitCloneArgs}
-
-		localConfigDir := filepath.Join(localRepoDir, path)
-
-		cpArgs := NewArgs("-r", filepath.Join(c.Path, "*"), localConfigDir)
-		cp := Cmd{Name: "cp", Args: cpArgs}
-
-		gitAddArgs := NewArgs("-c",
-			fmt.Sprintf(
-				"cd %s && git add .",
-				localRepoDir,
-			),
-		)
-		gitAdd := Cmd{Name: "bash", Args: gitAddArgs}
-
-		gitCommitPushArgs := NewArgs("-c",
-			"git commit -m 'automated commit' && git push",
-		)
-		gitCommitPush := Cmd{Name: "bash", Args: gitCommitPushArgs}
-
-		gitDiffArgs := NewArgs("-c",
-			"git diff",
-		)
-		gitDiff := Cmd{Name: "bash", Args: gitDiffArgs}
-
-		cmds = append(cmds, gitClone, cp, gitAdd)
-
-		if t == Plan {
-			cmds = append(cmds, gitDiff)
-		} else {
-			cmds = append(cmds, gitCommitPush)
-		}
-	}
-
-	// create or update the config manangement plugin configmap
-	// with the generated ConfigManagementPlugin data.
-	// and if not yet done so, patch the argocd repo server with the updated configmap
-	// or restart the argocd repo server
-	// OR
-	// git-commit/push the cmp config file or the configmap containing it to a repo
-	// so that some automation redeploys argocd-repo-server with it...
-	// kargo cmp --namespace $argons $argo_repo_server_deploy apply/diff --name $plugin_name --type kompose_vals
-
-	if t == Plan {
-		// TODO
-		// - Add some command to diff argocd-app-create changes
-		// - kargo cmp --namespace $argons $argo_repo_server_deploy diff --name $plugin_name --type kompose_vals
-		return append([]Cmd{}, cmds...), nil
+		remotePath = remotePath.AppendStrings(c.ArgoCD.Path)
+	} else if c.ArgoCD.PathFrom != "" {
+		remotePath = remotePath.AppendValueFromOutput(c.ArgoCD.PathFrom)
 	}
 
 	{
-		var server string
 		if c.ArgoCD.Server != "" {
-			server = c.ArgoCD.Server
+			args = args.AppendStrings("--server", c.ArgoCD.Server)
+
+			loginArgs = loginArgs.AppendStrings(c.ArgoCD.Server)
 		} else if c.ArgoCD.ServerFrom != "" {
-			server, err = g.GetValue(c.ArgoCD.ServerFrom)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain argocd.ServerFrom: %v", err)
-			}
-		}
-		if server != "" {
-			args = args.AppendStrings("--server", server)
+			args = args.AppendStrings("--server")
+			args = args.AppendValueFromOutput(c.ArgoCD.ServerFrom)
+
+			loginArgs = loginArgs.AppendValueFromOutput(c.ArgoCD.ServerFrom)
 		}
 	}
 
 	{
-		var username string
 		if c.ArgoCD.Username != "" {
-			username = c.ArgoCD.Username
+			loginArgs = loginArgs.AppendStrings("--username", c.ArgoCD.Username)
 		} else if c.ArgoCD.UsernameFrom != "" {
-			username, err = g.GetValue(c.ArgoCD.UsernameFrom)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain argocd.UsernameFrom: %v", err)
-			}
-		}
-		if username != "" {
-			args = args.AppendStrings("--username", username)
+			loginArgs = loginArgs.AppendStrings("--username")
+			loginArgs = loginArgs.AppendValueFromOutput(c.ArgoCD.UsernameFrom)
 		}
 	}
 
 	{
-		var password string
 		if c.ArgoCD.Password != "" {
-			password = c.ArgoCD.Password
+			loginArgs = loginArgs.AppendStrings("--password", c.ArgoCD.Password)
 		} else if c.ArgoCD.PasswordFrom != "" {
-			password, err = g.GetValue(c.ArgoCD.PasswordFrom)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain argocd.PasswordFrom: %v", err)
-			}
-		}
-		if password != "" {
-			args = args.AppendStrings("--password", password)
+			loginArgs = loginArgs.AppendStrings("--password")
+			loginArgs = loginArgs.AppendValueFromOutput(c.ArgoCD.PasswordFrom)
 		}
 	}
 
 	{
-		var insecure string
 		if c.ArgoCD.Insecure {
-			insecure = fmt.Sprintf("%v", c.ArgoCD.Insecure)
-		} else if c.ArgoCD.InsecureFrom != "" {
-			insecure, err = g.GetValue(c.ArgoCD.InsecureFrom)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain argocd.InsecureFrom: %v", err)
-			}
-		}
-		if insecure != "" {
-			if insecure != "true" && insecure != "false" {
-				return nil, fmt.Errorf("invalid argocd.InsecureFrom value: %s", insecure)
-			}
+			args = args.AppendStrings("--insecure")
 
-			args = args.AppendStrings("--insecure", insecure)
+			loginArgs = loginArgs.AppendStrings("--insecure")
+		} else if c.ArgoCD.InsecureFrom != "" {
+			args = args.AppendValueIfOutput("--insecure", c.ArgoCD.InsecureFrom)
+
+			loginArgs = loginArgs.AppendValueIfOutput("--insecure", c.ArgoCD.InsecureFrom)
 		}
 	}
 
 	appArgs = appArgs.CopyFrom(args)
 	{
+		if c.ArgoCD.DestName != "" {
+			appArgs = appArgs.AppendStrings("--dest-name", c.ArgoCD.DestName)
+
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendStrings("--name", c.ArgoCD.DestName)
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendStrings("--alias", c.ArgoCD.DestName)
+
+			clusterAddArgs = clusterAddArgs.AppendStrings(c.ArgoCD.DestName)
+		} else if c.ArgoCD.DestNameFrom != "" {
+			appArgs = appArgs.AppendStrings("--dest-name")
+			appArgs = appArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
+
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendStrings("--name")
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendStrings("--alias")
+			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
+
+			clusterAddArgs = clusterAddArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
+		}
+
 		var pluginName string
 		if c.ArgoCD.ConfigManagementPlugin != "" {
 			pluginName = c.ArgoCD.ConfigManagementPlugin
@@ -205,25 +160,20 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 			appArgs = appArgs.AppendStrings("--config-management-plugin=" + pluginName)
 		}
 
-		var image string
-		if c.ArgoCD.Image != "" {
-			image = c.ArgoCD.Image
-		} else if c.ArgoCD.ImageFrom != "" {
-			image, err = g.GetValue(c.ArgoCD.ImageFrom)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain argocd.ImageFrom: %v", err)
-			}
-		}
-		if image != "" {
-			appArgs = appArgs.AppendStrings("--image", image)
-		}
-
-		if path != "" {
-			appArgs = appArgs.AppendStrings("--path", path)
-		}
+		// TODO Remote path is required for ArgoCD App with Repo
+		appArgs = appArgs.AppendStrings("--path")
+		appArgs = appArgs.Append(remotePath)
 
 		if c.ArgoCD.Repo != "" {
 			appArgs = appArgs.AppendStrings("--repo", c.ArgoCD.Repo)
+
+			repoAddArgs = repoAddArgs.AppendStrings(c.ArgoCD.Repo)
+		} else if c.ArgoCD.RepoFrom != "" {
+			appArgs = appArgs.AppendStrings("--repo")
+			appArgs = appArgs.AppendValueFromOutput(c.ArgoCD.RepoFrom)
+
+			repoAddArgs = repoAddArgs.AppendStrings("--repo")
+			repoAddArgs = repoAddArgs.AppendValueFromOutput(c.ArgoCD.RepoFrom)
 		}
 
 		destNamespace := c.ArgoCD.DestNamespace
@@ -241,32 +191,155 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		}
 	}
 
+	var proj string
+	if c.ArgoCD.Project != "" {
+		proj = c.ArgoCD.Project
+	} else {
+		proj = c.Name
+	}
+
+	var regex = regexp.MustCompile(`[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*`)
+	if !regex.MatchString(proj) {
+		return nil, fmt.Errorf("invalid argocd.Project value: %s", proj)
+	}
+
+	if c.ArgoCD.RepoSSHPrivateKeyPath != "" {
+		repoAddArgs = repoAddArgs.AppendStrings("--ssh-private-key-path", c.ArgoCD.RepoSSHPrivateKeyPath)
+	} else if c.ArgoCD.RepoSSHPrivateKeyPathFrom != "" {
+		repoAddArgs = repoAddArgs.AppendStrings("--ssh-private-key-path")
+		repoAddArgs = repoAddArgs.AppendValueFromOutput(c.ArgoCD.RepoSSHPrivateKeyPathFrom)
+	}
+
 	if args.Len() == 0 {
 		return nil, errors.New("unable to generate argocd commands: specify argocd connection-related fields in your config")
 	} else if appArgs.Len() == 0 {
 		return nil, errors.New("unable to generate argocd commands: specify argocd app-related fields in your config")
-	} else {
+	}
+
+	push := c.ArgoCD.Push
+	if len(c.ArgoCD.Upload) > 0 {
+		push = true
+	}
+
+	if push {
+		localRepoDir := filepath.Join("kanvas-temp", c.Name)
+
 		var script *Args
 
-		script = script.Append("argocd", "proj", "create", c.ArgoCD.Project)
-		script = script.Append(args)
-		script = script.Append(";")
-		script = script.Append("argocd", "app", "create")
-		script = script.Append(appArgs)
-		script = script.Append(";")
-		script = script.Append("argocd", "app", "set")
-		script = script.Append(appArgs)
+		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, localRepoDir)
+		script = script.Append("git", gitCloneArgs, "||")
+		// gitClone := Cmd{Name: "git", Args: gitCloneArgs}
 
-		if g.TailLogs {
-			script = script.Append(";")
-			script = script.Append("argocd", "app", "logs", c.Name, "--follow", "--tail=-1")
+		script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", "origin", "&&", "git", "stash", "&&", "git", "checkout", "main", "&&", "git", "rebase", "origin/main", ")")
+
+		gitCheckout := Cmd{
+			Name: "bash",
+			Args: NewArgs("-vxc", NewBashScript(script)),
 		}
 
-		cmds = append(cmds, Cmd{
-			Name: "bash",
-			Args: NewArgs("-c", NewBashScript(script)),
-		})
+		var (
+			copyLocal  *Args
+			copyRemote *Args
+		)
+
+		var copyFiles []Cmd
+
+		for _, u := range c.ArgoCD.Upload {
+			if p := u.Local; p != "" {
+				copyLocal = copyLocal.AppendStrings(p)
+			}
+
+			if p := u.Remote; p != "" {
+				copyRemote = copyRemote.AppendStrings(p)
+			}
+
+			cpArgs := NewArgs("cp", "-r", NewJoin(NewArgs(copyLocal, string(os.PathSeparator), "*")), NewJoin(NewArgs(localRepoDir, string(os.PathSeparator), copyRemote)))
+			cp := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(cpArgs))}
+
+			copyFiles = append(copyFiles, cp)
+		}
+
+		var gitAddArgs *Args
+		gitAddArgs = gitAddArgs.Append("cd", localRepoDir, ";")
+		gitAddArgs = gitAddArgs.Append("git", "add", ".")
+		gitAdd := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitAddArgs))}
+
+		var gitCommitPushArgs *Args
+		gitCommitPushArgs = gitCommitPushArgs.Append(
+			"cd", localRepoDir, ";",
+		)
+		gitCommitPushArgs = gitCommitPushArgs.Append(
+			"(", "git", "commit", "-m", "'automated commit'", "&&", "git push", ")", "||", "echo status=$?",
+		)
+		gitCommitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitCommitPushArgs))}
+
+		var gitDiffArgs *Args
+		gitDiffArgs = gitDiffArgs.Append(
+			"cd", localRepoDir, ";",
+		)
+		gitDiffArgs = gitDiffArgs.Append(
+			"git", "diff",
+		)
+		gitDiff := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitDiffArgs))}
+
+		cmds = append(cmds, gitCheckout)
+		cmds = append(cmds, copyFiles...)
+		cmds = append(cmds, gitAdd)
+
+		if t == Plan {
+			cmds = append(cmds, gitDiff)
+		} else {
+			cmds = append(cmds, gitCommitPush)
+		}
 	}
+
+	// create or update the config manangement plugin configmap
+	// with the generated ConfigManagementPlugin data.
+	// and if not yet done so, patch the argocd repo server with the updated configmap
+	// or restart the argocd repo server
+	// OR
+	// git-commit/push the cmp config file or the configmap containing it to a repo
+	// so that some automation redeploys argocd-repo-server with it...
+	// kargo cmp --namespace $argons $argo_repo_server_deploy apply/diff --name $plugin_name --type kompose_vals
+	if t == Plan {
+		// TODO
+		// - Add some command to diff argocd-app-create changes
+		// - kargo cmp --namespace $argons $argo_repo_server_deploy diff --name $plugin_name --type kompose_vals
+		return append([]Cmd{}, cmds...), nil
+	}
+
+	var script *Args
+
+	script = script.Append("argocd", "login")
+	script = script.Append(loginArgs)
+	script = script.Append(";")
+	script = script.Append("argocd", "proj", "create", proj)
+	script = script.Append(args)
+	script = script.Append(";")
+	script = script.Append("aws", "eks", "update-kubeconfig")
+	script = script.Append(awsEKSUpdateKubeconfigArgs)
+	script = script.Append(";")
+	script = script.Append("argocd", "cluster", "add")
+	script = script.Append(clusterAddArgs)
+	script = script.Append(";")
+	script = script.Append("argocd", "repo", "add")
+	script = script.Append(repoAddArgs)
+	script = script.Append(";")
+	script = script.Append("argocd", "app", "create")
+	script = script.Append(appArgs)
+	script = script.Append(";")
+	script = script.Append("argocd", "app", "set")
+	script = script.Append(appArgs)
+
+	if g.TailLogs {
+		script = script.Append(";")
+		script = script.Append("argocd", "app", "logs", c.Name, "--follow", "--tail=-1")
+	}
+
+	cmds = append(cmds, Cmd{
+		Name: "bash",
+		Args: NewArgs("-vxc", NewBashScript(script)),
+	})
 
 	return cmds, nil
 }

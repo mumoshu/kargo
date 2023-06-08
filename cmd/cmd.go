@@ -16,8 +16,9 @@ func Dir(dir string) Option {
 	}
 }
 
-func New(name string, opts ...Option) kargo.Cmd {
+func New(id, name string, opts ...Option) kargo.Cmd {
 	c := kargo.Cmd{
+		ID:   id,
 		Name: name,
 	}
 

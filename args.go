@@ -12,7 +12,11 @@ type Args struct {
 }
 
 func NewArgs(vs ...interface{}) *Args {
-	return &Args{underlying: append([]interface{}{}, vs...)}
+	var args *Args
+
+	args = args.Append(vs...)
+
+	return args
 }
 
 func (a *Args) Len() int {
@@ -49,20 +53,51 @@ func (a *Args) Append(vs ...interface{}) *Args {
 
 	for _, v := range vs {
 		v := v
-		a.underlying = append(a.underlying, v)
+		switch v := v.(type) {
+		case *Args:
+			a.underlying = append(a.underlying, v.underlying...)
+		default:
+			a.underlying = append(a.underlying, v)
+		}
 	}
 	return a
 }
 
-func (a *Args) AppendValueFromOutput(ref string) {
+func (a *Args) AppendValueFromOutput(ref string) *Args {
+	if a == nil {
+		a = &Args{}
+	}
+
 	a.underlying = append(a.underlying, DynArg{FromOutput: ref})
+
+	return a
 }
 
-func (a *Args) AppendValueFromOutputWithPrefix(prefix, ref string) {
+func (a *Args) AppendValueIfOutput(v, ref string) *Args {
+	if a == nil {
+		a = &Args{}
+	}
+
+	a.underlying = append(a.underlying, DynArg{FromOutput: ref, Value: v})
+
+	return a
+}
+
+func (a *Args) AppendValueFromOutputWithPrefix(prefix, ref string) *Args {
+	if a == nil {
+		a = &Args{}
+	}
+
 	a.underlying = append(a.underlying, DynArg{Prefix: prefix, FromOutput: ref})
+
+	return a
 }
 
 func (a *Args) Visit(str func(string), out func(DynArg), flag func(KargoValueProvider)) {
+	if a == nil {
+		return
+	}
+
 	for _, x := range a.underlying {
 		switch a := x.(type) {
 		case string:
@@ -103,7 +138,11 @@ func (a *Args) Collect(get func(string) (string, error)) ([]string, error) {
 			errors = append(errors, fmt.Errorf("after %s: %w", prev, err))
 			return
 		}
-		args = append(args, a.Prefix+v)
+		if a.Value != "" {
+			args = append(args, a.Value)
+		} else {
+			args = append(args, a.Prefix+v)
+		}
 		prev = a.FromOutput
 	}, func(fvp KargoValueProvider) {
 		v, err := fvp.KargoValue(get)
@@ -160,4 +199,7 @@ type DynArg struct {
 
 	// FromOutput is a reference to an output of another kargo command.
 	FromOutput string
+
+	// Value is the value used when the FromOutput is provided and the output is non-empty.
+	Value string
 }

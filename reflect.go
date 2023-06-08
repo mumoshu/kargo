@@ -134,6 +134,10 @@ func appendReflectedArgs(args *Args, value reflect.Value, field reflect.StructFi
 			return args.Append(v), nil
 		}
 
+		if len(items) == 2 && items[1] == "paramless" {
+			return args.Append(fmt.Sprintf("--%s", items[0])), nil
+		}
+
 		flag = items[0]
 	}
 

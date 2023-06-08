@@ -25,7 +25,8 @@ type Config struct {
 	// It defaults to the basename of the path if
 	// kargo is run as a command.
 	Name      string     `yaml:"name" argocd-app:",arg"`
-	Path      string     `yaml:"path" argocd-app:""`
+	Path      string     `yaml:"path" kargo:""`
+	PathFrom  string     `yaml:"pathFrom" kargo:""`
 	Env       []Env      `yaml:"env" argocd-app:"plugin-env"`
 	Compose   *Compose   `yaml:"compose"`
 	Kompose   *Kompose   `yaml:"kompose"`
@@ -106,9 +107,18 @@ func (s Set) KargoValue(get GetValue) (string, error) {
 }
 
 type ArgoCD struct {
-	Repo       string `yaml:"repo"`
-	Path       string `yaml:"path"`
-	DirRecurse bool   `yaml:"dirRecurse" argocd-app:"directory-recurse"`
+	Repo     string `yaml:"repo" kargo:""`
+	RepoFrom string `yaml:"repoFrom" kargo:""`
+
+	RepoSSHPrivateKeyPath     string `yaml:"repoSSHPrivateKeyPath" kargo:""`
+	RepoSSHPrivateKeyPathFrom string `yaml:"repoSSHPrivateKeyPathFrom" kargo:""`
+
+	Path     string `yaml:"path" kargo:""`
+	PathFrom string `yaml:"pathFrom" kargo:""`
+
+	Upload []Upload `yaml:"upload" kargo:""`
+
+	DirRecurse bool `yaml:"dirRecurse" argocd-app:"directory-recurse,paramless"`
 
 	// Server is the ArgoCD server to be used for the deployment.
 	Server string `yaml:"server" kargo:""`
@@ -137,18 +147,24 @@ type ArgoCD struct {
 	// so that it triggers the deployment.
 	Push bool `yaml:"push" kargo:""`
 
+	// DestName is the name of the K8s cluster where the deployment is to be done.
+	DestName string `yaml:"name" kargo:""`
+	// DestNameFrom is the key to be used to get the target K8s cluster name from the environment.
+	DestNameFrom string `yaml:"nameFrom" kargo:""`
+
 	// DestNamespace is the namespace to be used for the deployment.
 	DestNamespace string `yaml:"namespace" kargo:""`
 	// DestServer is the Kubernetes API endpoint of the cluster where the deployment is to be done.
 	DestServer string `yaml:"destServer" kargo:""`
 	// DestServerFrom is the key to be used to get the target Kubernetes API endpoint from the environment.
 	DestServerFrom string `yaml:"destServerFrom" kargo:""`
-	// Image is the image to be used for the deployment.
-	Image string `yaml:"image" kargo:""`
-	// ImageFrom is the key to be used to get the image from the environment.
-	ImageFrom string `yaml:"imageFrom" kargo:""`
 	// ConfigManagementPlugin is the config management plugin to be used.
 	ConfigManagementPlugin string `yaml:"configManagementPlugin" argocd-app:"config-management-plugin"`
+}
+
+type Upload struct {
+	Local  string `yaml:"local" kargo:""`
+	Remote string `yaml:"remote" kargo:""`
 }
 
 type GetValue func(key string) (string, error)

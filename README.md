@@ -84,9 +84,13 @@ It's intentionally out of the scope of this project to keep it simple.
 
 However, you can still support multiple environments just by creating one `kargo.yaml` per environment.
 
-Let's suppose you are deploying to two environments, `production` and `preview.
+Let's suppose you are deploying to two environments, `production` and `preview`.
 You start by creating `production.kargo.yaml` and `preview.kargo.yaml`.
 
 When you want `kargo` to deploy to a specific environment, just give the corresponding `kargo` config file via the `-f` flag.
 
 That is, you'll run `kargo` like `kargo -f production.kargo.yaml apply` for a production deployment, whereas it would be `kargo -f preview.kargo.yaml apply` for a preview deployment.
+
+You'll ask how one could reduce the duplications and boilerplates in the two config files.
+
+`kargo` assumes you would like to use a tool like [cue](https://cuelang.org/) or [jsonnnet](https://jsonnet.org/) to produce the `kargo` config files. That way, you can use advanded features provided in those tools to reduce boiler plates and introduce any abstractions to compose your `kargo` config files in a maintainable manner.

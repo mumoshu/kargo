@@ -350,13 +350,17 @@ func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileMod
 		return nil, errors.New("ToolsCommand is required to run kargo tools")
 	}
 
+	if g.TempDir == "" {
+		return nil, errors.New("TempDir is required to use GitOps support")
+	}
+
 	const (
 		remoteName = "origin"
 	)
 
 	var cmds []Cmd
 
-	localRepoDir := filepath.Join("kargo-gitops", name)
+	localRepoDir := filepath.Join(g.TempDir, "kargo-gitops", name)
 
 	var script *Args
 
@@ -552,6 +556,10 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			Name: "kustomize",
 			Args: NewArgs("edit", "set", "image", args),
 			Dir:  c.Path,
+		}
+
+		if g.TempDir == "" {
+			return nil, fmt.Errorf("TempDir is required to run kustomize")
 		}
 
 		tmpFile := filepath.Join(g.TempDir, "kustomize-built.yaml")

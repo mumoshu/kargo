@@ -365,7 +365,7 @@ func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileMod
 	var script *Args
 
 	gitCloneArgs := NewArgs("clone", repo, localRepoDir)
-	script = script.Append("git", gitCloneArgs, "||")
+	script = script.Append("git", gitCloneArgs, ";")
 	// gitClone := Cmd{Name: "git", Args: gitCloneArgs}
 
 	formatDateTime := func(t time.Time) string {

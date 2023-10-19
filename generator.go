@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/mumoshu/kargo/tools"
 )
 
 // Generator generates commands and config files
@@ -21,6 +24,19 @@ type Generator struct {
 	TempDir string
 	// TailLogs is set to true if you want kargo to tail the logs
 	TailLogs bool
+
+	// ToolsCommand is the command to run kargo tools.
+	//
+	// If you set this to e.g. `mycmd tools`, kargo will run
+	// `mycmd tools <tool> <args...>` if needed.
+	//
+	// An example of a tool is `create-pullrequest`, whose command becomes
+	// `mycmd tools create-pullrequest <args...>`.
+	//
+	// This needs to be set if you want to use kargo tools.
+	// If this is not set and kargo required to run a tool,
+	// kargo will return an error.
+	ToolsCommand []string
 }
 
 type Target int
@@ -35,6 +51,19 @@ type Cmd struct {
 	Name string
 	Args *Args
 	Dir  string
+	// AddEnv is a map of environment variables to add to the command.
+	// That is, the command will be run with the environment variables
+	// specified in AddEnv in addition to the environment variables provided
+	// by the current process(os.Environ).
+	AddEnv map[string]string
+}
+
+func (c Cmd) ToArgs() *Args {
+	return NewArgs(c.Name, c.Args)
+}
+
+func (c *Cmd) String() string {
+	return fmt.Sprintf("%s %s", c.Name, c.Args)
 }
 
 func (g *Generator) ExecCmds(c *Config, t Target) ([]Cmd, error) {
@@ -222,75 +251,11 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	}
 
 	if push {
-		localRepoDir := filepath.Join("kanvas-temp", c.Name)
-
-		var script *Args
-
-		gitCloneArgs := NewArgs("clone", c.ArgoCD.Repo, localRepoDir)
-		script = script.Append("git", gitCloneArgs, "||")
-		// gitClone := Cmd{Name: "git", Args: gitCloneArgs}
-
-		script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", "origin", "&&", "git", "stash", "&&", "git", "checkout", "main", "&&", "git", "rebase", "origin/main", ")")
-
-		gitCheckout := Cmd{
-			Name: "bash",
-			Args: NewArgs("-vxc", NewBashScript(script)),
+		g, err := g.gitOps(t, c.Name, c.ArgoCD.Repo, c.ArgoCD.Upload, nil)
+		if err != nil {
+			return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 		}
-
-		var (
-			copyLocal  *Args
-			copyRemote *Args
-		)
-
-		var copyFiles []Cmd
-
-		for _, u := range c.ArgoCD.Upload {
-			if p := u.Local; p != "" {
-				copyLocal = copyLocal.AppendStrings(p)
-			}
-
-			if p := u.Remote; p != "" {
-				copyRemote = copyRemote.AppendStrings(p)
-			}
-
-			cpArgs := NewArgs("cp", "-r", NewJoin(NewArgs(copyLocal, string(os.PathSeparator), "*")), NewJoin(NewArgs(localRepoDir, string(os.PathSeparator), copyRemote)))
-			cp := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(cpArgs))}
-
-			copyFiles = append(copyFiles, cp)
-		}
-
-		var gitAddArgs *Args
-		gitAddArgs = gitAddArgs.Append("cd", localRepoDir, ";")
-		gitAddArgs = gitAddArgs.Append("git", "add", ".")
-		gitAdd := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitAddArgs))}
-
-		var gitCommitPushArgs *Args
-		gitCommitPushArgs = gitCommitPushArgs.Append(
-			"cd", localRepoDir, ";",
-		)
-		gitCommitPushArgs = gitCommitPushArgs.Append(
-			"(", "git", "commit", "-m", "'automated commit'", "&&", "git push", ")", "||", "echo status=$?",
-		)
-		gitCommitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitCommitPushArgs))}
-
-		var gitDiffArgs *Args
-		gitDiffArgs = gitDiffArgs.Append(
-			"cd", localRepoDir, ";",
-		)
-		gitDiffArgs = gitDiffArgs.Append(
-			"git", "diff",
-		)
-		gitDiff := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitDiffArgs))}
-
-		cmds = append(cmds, gitCheckout)
-		cmds = append(cmds, copyFiles...)
-		cmds = append(cmds, gitAdd)
-
-		if t == Plan {
-			cmds = append(cmds, gitDiff)
-		} else {
-			cmds = append(cmds, gitCommitPush)
-		}
+		cmds = append(cmds, g...)
 	}
 
 	// create or update the config manangement plugin configmap
@@ -340,6 +305,150 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 		Name: "bash",
 		Args: NewArgs("-vxc", NewBashScript(script)),
 	})
+
+	return cmds, nil
+}
+
+func (g *Generator) runWithinDir(dir string, cmds []Cmd) Cmd {
+	script := g.scriptWithinDir(dir, cmds)
+
+	runScript := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(script))}
+
+	return runScript
+}
+
+func (g *Generator) scriptWithinDir(dir string, cmds []Cmd) *Args {
+	var script *Args
+	script = script.Append("cd", dir, ";")
+	for i, cmd := range cmds {
+		script = script.Append(cmd.Name, cmd.Args)
+		if i < len(cmds)-1 {
+			script = script.Append("&&")
+		}
+	}
+	return script
+}
+
+// gitOps generates a series of commands to:
+// - git-clone the repo,
+// - copy files from the local filesystem to the worktree,
+// - modify files in the worktree,
+// - git-add the modified files,
+// - git-commit the changes,
+// - and git-push the changes.
+// The commands are generated in such a way that they can be
+// used to plan or apply the deployment in a gitops environment.
+func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileModCmds []Cmd) ([]Cmd, error) {
+	if t == Apply && len(g.ToolsCommand) == 0 {
+		return nil, errors.New("ToolsCommand is required to run kargo tools")
+	}
+
+	const (
+		remoteName = "origin"
+	)
+
+	var cmds []Cmd
+
+	localRepoDir := filepath.Join("kargo-gitops", name)
+
+	var script *Args
+
+	gitCloneArgs := NewArgs("clone", repo, localRepoDir)
+	script = script.Append("git", gitCloneArgs, "||")
+	// gitClone := Cmd{Name: "git", Args: gitCloneArgs}
+
+	formatDateTime := func(t time.Time) string {
+		return t.Format("20060102150405")
+	}
+	datetime := formatDateTime(time.Now())
+	branchName := "kargo-" + datetime
+
+	baseBranch := "main"
+	script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", remoteName, "&&", "git", "stash", "&&", "git", "checkout", "-b", branchName, remoteName+"/"+baseBranch, "&&", "git", "rebase", remoteName+"/"+baseBranch, ")")
+
+	runGitCheckoutScript := Cmd{
+		Name: "bash",
+		Args: NewArgs("-vxc", NewBashScript(script)),
+	}
+
+	var (
+		copyLocal  *Args
+		copyRemote *Args
+	)
+
+	var fileCopies []Cmd
+
+	for _, u := range copies {
+		if p := u.Local; p != "" {
+			copyLocal = copyLocal.AppendStrings(p)
+		}
+
+		if p := u.Remote; p != "" {
+			copyRemote = copyRemote.AppendStrings(p)
+		}
+
+		cpArgs := NewArgs("cp", "-r", NewJoin(NewArgs(copyLocal, string(os.PathSeparator), "*")), NewJoin(NewArgs(localRepoDir, string(os.PathSeparator), copyRemote)))
+		cp := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(cpArgs))}
+
+		fileCopies = append(fileCopies, cp)
+	}
+
+	fileModScript := g.scriptWithinDir(localRepoDir, fileModCmds)
+
+	runFileModScript := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(fileModScript))}
+
+	var gitAddArgs *Args
+	gitAddArgs = gitAddArgs.Append("cd", localRepoDir, ";")
+	gitAddArgs = gitAddArgs.Append("git", "add", ".")
+	runGitAddScript := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitAddArgs))}
+
+	var gitCommitPushArgs *Args
+	gitCommitPushArgs = gitCommitPushArgs.Append(
+		"cd", localRepoDir, ";",
+	)
+	gitCommitPushArgs = gitCommitPushArgs.Append(
+		"git", "commit", "-m", "'automated commit'", "&&", "git push", remoteName, branchName,
+	)
+	gitCommitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitCommitPushArgs))}
+
+	// var gitDiffArgs *Args
+	// gitDiffArgs = gitDiffArgs.Append(
+	// 	"cd", localRepoDir, ";",
+	// )
+	// gitDiffArgs = gitDiffArgs.Append(
+	// 	"git", "diff",
+	// )
+	// gitDiff := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitDiffArgs))}
+
+	cmds = append(cmds, runGitCheckoutScript)
+	cmds = append(cmds, fileCopies...)
+	cmds = append(cmds, runFileModScript)
+	cmds = append(cmds, runGitAddScript)
+
+	tokenEnv := "KARGO_TOOLS_GITHUB_TOKEN"
+	var toolArgs []string
+	toolArgs = append(toolArgs, g.ToolsCommand[1:]...)
+	toolArgs = append(toolArgs, tools.CommandCreatePullRequest,
+		"--"+tools.FlagCreatePullRequestDir, localRepoDir,
+		"--"+tools.FlagCreatePullRequestTitle, "Deploy "+name,
+		"--"+tools.FlagCreatePullRequestBody, "Deploy "+name,
+		"--"+tools.FlagCreatePullRequestHead, branchName,
+		"--"+tools.FlagCreatePullRequestBase, baseBranch,
+		"--"+tools.FlagCreatePullRequestTokenEnv, tokenEnv,
+	)
+	if os.Getenv("KANVAS_DRY_RUN") == "true" || t == Plan {
+		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestDryRun, "true")
+	}
+	githubToken := os.Getenv("GITHUB_TOKEN")
+	if githubToken == "" {
+		return nil, fmt.Errorf("unable to generate gitops commands: %s is required", "GITHUB_TOKEN")
+	}
+	kargoToolsCreatePullRequest := Cmd{
+		Name:   g.ToolsCommand[0],
+		Args:   NewArgs(toolArgs),
+		AddEnv: map[string]string{tokenEnv: githubToken},
+	}
+	cmds = append(cmds, gitCommitPush, kargoToolsCreatePullRequest)
 
 	return cmds, nil
 }
@@ -421,9 +530,15 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return []Cmd{helmRepoAdd, helmDiff}, nil
 		}
 	} else if c.Kustomize != nil {
-		args, err = AppendArgs(args, c.Kustomize, FieldTagKustomize)
-		if err != nil {
-			return nil, err
+		if c.Kustomize.Images != nil {
+			args, err = AppendArgs(args, c.Kustomize.Images, FieldTagKustomize)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if args.Len() == 0 {
+			return nil, fmt.Errorf("unable to generate kustomize commands: specify kubernetes.kustomize.images fields in your config")
 		}
 
 		kustomizeEdit := Cmd{
@@ -456,11 +571,26 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			Args: NewArgs("apply", kubectlArgs),
 		}
 
-		switch t {
-		case Apply:
-			return []Cmd{kustomizeEdit, kustomizeBuild, kubectlApply}, nil
-		case Plan:
-			return []Cmd{kustomizeEdit, kustomizeBuild, kubectlDiff}, nil
+		if c.Kustomize.Strategy == KustomizeStrategySetImageAndCreatePR {
+			if c.Kustomize.Git.Repo == "" {
+				return nil, fmt.Errorf("kustomize.git.repo is required for kustomize.strategy=%s", KustomizeStrategySetImageAndCreatePR)
+			}
+			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, []Cmd{kustomizeEdit})
+			if err != nil {
+				return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
+			}
+			return setImageAndCreatePR, nil
+		} else if c.Kustomize.Strategy == KustomizeStrategyBuildAndKubectlApply || c.Kustomize.Strategy == "" {
+			switch t {
+			case Apply:
+				return []Cmd{kustomizeEdit, kustomizeBuild, kubectlApply}, nil
+			case Plan:
+				return []Cmd{kustomizeEdit, kustomizeBuild, kubectlDiff}, nil
+			default:
+				return nil, fmt.Errorf("unsupported target: %v", t)
+			}
+		} else {
+			return nil, fmt.Errorf("unsupported kustomize strategy: %s", c.Kustomize.Strategy)
 		}
 	} else if c.Kompose != nil {
 		args, err = AppendArgs(args, c.Kompose, FieldTagKustomize)

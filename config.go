@@ -2,7 +2,6 @@ package kargo
 
 import (
 	"fmt"
-	"strings"
 )
 
 const (
@@ -61,38 +60,70 @@ type Kompose struct {
 	EnableVals bool `yaml:"enableVals" kargo:""`
 }
 
+const (
+	KustomizeStrategyBuildAndKubectlApply = "BuildAndKubectlApply"
+	KustomizeStrategySetImageAndCreatePR  = "SetImageAndCreatePullRequest"
+)
+
 type Kustomize struct {
-	Images KustomizeImages `yaml:"images" argocd-app:"kustomize-image"`
+	// Strategy is the strategy to be used for the deployment.
+	//
+	// The supported values are:
+	// - BuildAndKubectlApply
+	// - SetImageAndCreatePullRequest
+	//
+	// BuildAndKubectlApply is the default strategy.
+	// It runs kustomize build and kubectl apply to deploy the application.
+	//
+	// SetImageAndCreatePullRequest runs kustomize edit set image and creates a pull request.
+	// It's useful to trigger a deployment workflow in CI/CD.
+	Strategy string          `yaml:"strategy" kargo:""`
+	Images   KustomizeImages `yaml:"images" argocd-app:"kustomize-image"`
+	Git      KustomizeGit    `yaml:"git" kargo:""`
+}
+
+type KustomizeGit struct {
+	Repo string `yaml:"repo" kargo:""`
+	Path string `yaml:"path" kargo:""`
 }
 
 type KustomizeImages []KustomizeImage
 
-func (i KustomizeImages) KargoAppendArgs(args []string, key string) (*[]string, error) {
-	var images []string
+func (i KustomizeImages) KargoAppendArgs(args *Args, key string) (*Args, error) {
+	var images *Args
 	for _, img := range i {
-		var s string
-		if img.NewName == "" {
-			s = img.Name + ":" + img.NewTag
-		} else {
-			s = img.Name + "=" + img.NewName + ":" + img.NewTag
+		var s *Args
+		s = s.AppendStrings(img.Name)
+		if img.NewName != "" {
+			s = s.AppendStrings("=" + img.NewName)
 		}
-		images = append(images, s)
+		if img.NewTag != "" {
+			s = s.AppendStrings(":")
+			s = s.AppendStrings(img.NewTag)
+		} else if img.NewDigestFrom != "" {
+			s = s.AppendStrings("@")
+			s = s.AppendValueFromOutput(img.NewDigestFrom)
+		} else {
+			return nil, fmt.Errorf("either newTag or newDigestFrom must be set")
+		}
+		images = images.Append(NewJoin(s))
 	}
 
 	if key == "argocd" {
-		args = append(args, "--kustomize-image")
-		args = append(args, strings.Join(images, ","))
-	} else {
-		args = append(args, images...)
+		args = args.Append(args, "--kustomize-image")
 	}
+	args = args.Append(args, images)
 
-	return &args, nil
+	return args, nil
 }
 
+var _ KargoArgsAppender = KustomizeImages{}
+
 type KustomizeImage struct {
-	Name    string `yaml:"name"`
-	NewName string `yaml:"newName"`
-	NewTag  string `yaml:"newTag"`
+	Name          string `yaml:"name"`
+	NewName       string `yaml:"newName"`
+	NewTag        string `yaml:"newTag"`
+	NewDigestFrom string `yaml:"newDigestFrom"`
 }
 
 type Helm struct {

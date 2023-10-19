@@ -14,11 +14,51 @@ deployments without forcing your team to use kubectl/kustomize/helm/argocd.
 
 ## Usage
 
+### Standalone
+
 `kargo` has two commands, `kargo plan` and `kargo apply`.
 
 `plan` outputs the diff between the current state and the desired state of your application deployment, so that you can review changes before they are applied.
 
 `apply` runs the deployment`
+
+### Embedded
+
+`kargo` can be embedded into your own Go application.
+
+You instantiate a `kargo.Config` and a `kargo.Generator`, and let the generator generates the commands to be executed to either "plan" or "apply" the config changes you made.
+
+
+```go
+import (
+  "github.com/mumoshu/kargo"
+)
+
+func yourAppDeploymentTool() error {
+  c := &kargo.Config{
+    Name:    "myapp",
+    Path:    "testdata/compose",
+    Kompose: &kargo.Kompose{},
+    ArgoCD:  &kargo.ArgoCD{},
+  }
+
+  g := &kargo.Generator{
+    GetValue: func(key string) (string, error) {
+      return yourSecretManager.Get(key)
+    },
+    TailLogs: false,
+  }
+
+  cmds, err := g.ExecCmds(c, targ)
+  if err != nil {
+    return err
+  }
+
+  // Run the cmds with your favorite command runner.
+}
+```
+
+See [generator.go](./generator.go) and `generator_*_test.go` files for more information.
 
 ## Configuration
 

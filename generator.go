@@ -177,6 +177,8 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 			awsEKSUpdateKubeconfigArgs = awsEKSUpdateKubeconfigArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
 
 			clusterAddArgs = clusterAddArgs.AppendValueFromOutput(c.ArgoCD.DestNameFrom)
+		} else {
+			return nil, errors.New("unable to generate argocd commands: specify argocd.DestName or argocd.DestNameFrom in your config")
 		}
 
 		var pluginName string
@@ -191,6 +193,9 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 
 		// TODO Remote path is required for ArgoCD App with Repo
 		appArgs = appArgs.AppendStrings("--path")
+		if remotePath == nil {
+			return nil, errors.New("unable to generate argocd commands: specify argocd.Path or argocd.PathFrom in your config")
+		}
 		appArgs = appArgs.Append(remotePath)
 
 		if c.ArgoCD.Repo != "" {
@@ -203,6 +208,8 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 
 			repoAddArgs = repoAddArgs.AppendStrings("--repo")
 			repoAddArgs = repoAddArgs.AppendValueFromOutput(c.ArgoCD.RepoFrom)
+		} else {
+			return nil, errors.New("unable to generate argocd commands: specify argocd.repo or argocd.repoFrom in your config")
 		}
 
 		destNamespace := c.ArgoCD.DestNamespace

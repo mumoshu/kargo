@@ -23,7 +23,11 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 			Name:    "test",
 			Path:    "testdata/compose",
 			Kompose: &kargo.Kompose{},
-			ArgoCD:  &kargo.ArgoCD{},
+			ArgoCD: &kargo.ArgoCD{
+				Repo:     "exmaple.com/myrepo",
+				DestName: "myekscluster",
+				Path:     "to/where/push/manifests",
+			},
 		}
 
 		f(g, c)
@@ -57,8 +61,8 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 			{
 				Name: "bash",
 				Args: []string{
-					"-c",
-					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo",
+					"-vxc",
+					"argocd login https://localhost:8080 ; argocd proj create testproj --server https://localhost:8080 ; aws eks update-kubeconfig --name myekscluster --alias myekscluster ; argocd cluster add myekscluster ; argocd repo add exmaple.com/myrepo ; argocd app create test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo ; argocd app set test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo",
 				},
 				Dir: "",
 			},
@@ -74,8 +78,8 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 			{
 				Name: "bash",
 				Args: []string{
-					"-c",
-					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app logs test --follow --tail=-1",
+					"-vxc",
+					"argocd login https://localhost:8080 ; argocd proj create testproj --server https://localhost:8080 ; aws eks update-kubeconfig --name myekscluster --alias myekscluster ; argocd cluster add myekscluster ; argocd repo add exmaple.com/myrepo ; argocd app create test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo ; argocd app set test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo ; argocd app logs test --follow --tail=-1",
 				},
 				Dir: "",
 			},
@@ -85,6 +89,7 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 	t.Run("plan", func(t *testing.T) {
 		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
+			c.ArgoCD.Server = "https://localhost:8080"
 		}, []cmd{})
 	})
 
@@ -99,8 +104,8 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 			{
 				Name: "bash",
 				Args: []string{
-					"-c",
-					"argocd proj create testproj --server https://localhost:8080 ; argocd app create test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo ; argocd app set test --directory-recurse false --project testproj --server https://localhost:8080 --config-management-plugin=kargo",
+					"-vxc",
+					"argocd login https://localhost:8080 ; argocd proj create testproj --server https://localhost:8080 ; aws eks update-kubeconfig --name myekscluster --alias myekscluster ; argocd cluster add myekscluster ; argocd repo add exmaple.com/myrepo ; argocd app create test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo ; argocd app set test --directory-recurse --project testproj --server https://localhost:8080 --dest-name myekscluster --config-management-plugin=kargo --path to/where/push/manifests --repo exmaple.com/myrepo",
 				},
 				Dir: "",
 			},
@@ -111,6 +116,7 @@ func TestGenerate_ArgoCD_Kompose(t *testing.T) {
 		run(t, kargo.Plan, func(g *kargo.Generator, c *kargo.Config) {
 			g.TailLogs = false
 			c.Kompose.EnableVals = true
+			c.ArgoCD.Server = "https://localhost:8080"
 		}, []cmd{})
 	})
 }

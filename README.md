@@ -99,7 +99,7 @@ helm:
     value: foo
   - name: bar
     valueFrom: component_name.bar
-  valueFiles:
+  valuesFiles:
   - path/to/values.yaml
 argocd:
   # argocd.repo maps to --repo of argocd-app-create.

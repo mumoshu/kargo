@@ -395,18 +395,41 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			return nil, err
 		}
 
-		repo := filepath.Base(c.Helm.Repo)
-		helmRepoAdd := Cmd{Name: "helm", Args: NewArgs("repo", "add", repo, c.Helm.Repo)}
-		helmUpgradeArgs := NewArgs("upgrade", "--install", c.Name, repo+"/"+c.Helm.Chart, args)
+		var (
+			chart string
+			cmds  []Cmd
+		)
+
+		if c.Helm.Repo != "" {
+			repo := filepath.Base(c.Helm.Repo)
+			helmRepoAdd := Cmd{Name: "helm", Args: NewArgs("repo", "add", repo, c.Helm.Repo)}
+			cmds = append(cmds, helmRepoAdd)
+			// We treat Helm.Chart as a remote chart name
+			// which means we need to add a repo name as prefix
+			// resulting in a helm command like:
+			// helm upgrade --install <name> <repo>/<chart>
+			chart = repo + "/" + c.Helm.Chart
+		} else {
+			// We treat Helm.Chart as a path to a local chart
+			// which means we don't need to add a repo name as prefix
+			// resulting in a helm command like:
+			// helm upgrade --install <name> <path>
+			chart = c.Helm.Chart
+		}
+
+		// Note that helm-diff-upgrate flags are superset of helm-upgrade flags
+		helmUpgradeArgs := NewArgs("upgrade", "--install", c.Name, chart, args)
 
 		switch t {
 		case Apply:
 			helmUpgrade := Cmd{Name: "helm", Args: helmUpgradeArgs}
-			return []Cmd{helmRepoAdd, helmUpgrade}, nil
+			cmds = append(cmds, helmUpgrade)
+			return cmds, nil
 		case Plan:
 			helmDiffArgs := NewArgs("diff", helmUpgradeArgs)
 			helmDiff := Cmd{Name: "helm", Args: helmDiffArgs}
-			return []Cmd{helmRepoAdd, helmDiff}, nil
+			cmds = append(cmds, helmDiff)
+			return cmds, nil
 		}
 	} else if c.Kustomize != nil {
 		if c.Kustomize.Images != nil {

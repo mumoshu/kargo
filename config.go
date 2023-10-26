@@ -127,10 +127,11 @@ type KustomizeImage struct {
 }
 
 type Helm struct {
-	Repo    string `yaml:"repo" helm:""`
-	Chart   string `yaml:"chart" helm:"" argocd-app:"helm-chart"`
-	Version string `yaml:"version" argocd-app:"revision"`
-	Set     []Set  `yaml:"set" helm:"set" argocd-app:"helm-set"`
+	Repo       string   `yaml:"repo" helm:""`
+	Chart      string   `yaml:"chart" helm:"" argocd-app:"helm-chart"`
+	Version    string   `yaml:"version" argocd-app:"revision"`
+	Set        []Set    `yaml:"set" helm:"set" argocd-app:"helm-set"`
+	ValueFiles []string `yaml:"valueFiles" helm:"values" argocd-app:"values"`
 }
 
 func (s Set) KargoValue(get GetValue) (string, error) {

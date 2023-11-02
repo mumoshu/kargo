@@ -19,7 +19,7 @@ import (
 // - and git-push the changes.
 // The commands are generated in such a way that they can be
 // used to plan or apply the deployment in a gitops environment.
-func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileModCmds []Cmd) ([]Cmd, error) {
+func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileModCmds []Cmd, doPR bool) ([]Cmd, error) {
 	if t == Apply && len(g.ToolsCommand) == 0 {
 		return nil, errors.New("ToolsCommand is required to run kargo tools")
 	}
@@ -109,6 +109,10 @@ func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileMod
 	cmds = append(cmds, fileCopies...)
 	cmds = append(cmds, runFileModScript)
 	cmds = append(cmds, runGitAddScript)
+
+	if !doPR {
+		return cmds, nil
+	}
 
 	tokenEnv := "KARGO_TOOLS_GITHUB_TOKEN"
 	var toolArgs []string

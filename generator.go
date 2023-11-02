@@ -254,7 +254,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	}
 
 	if push {
-		g, err := g.gitOps(t, c.Name, c.ArgoCD.Repo, c.ArgoCD.Upload, nil)
+		g, err := g.gitOps(t, c.Name, c.ArgoCD.Repo, c.ArgoCD.Upload, nil, true)
 		if err != nil {
 			return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 		}
@@ -494,19 +494,30 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			if c.Kustomize.Git.Repo == "" {
 				return nil, fmt.Errorf("kustomize.git.repo is required for kustomize.strategy=%s", KustomizeStrategySetImageAndCreatePR)
 			}
-			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, []Cmd{kustomizeEdit})
+			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, []Cmd{kustomizeEdit}, true)
 			if err != nil {
 				return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 			}
 			return setImageAndCreatePR, nil
 		} else if c.Kustomize.Strategy == KustomizeStrategyBuildAndKubectlApply || c.Kustomize.Strategy == "" {
+			var cmds []Cmd
 			switch t {
 			case Apply:
-				return []Cmd{kustomizeEdit, kustomizeBuild, kubectlApply}, nil
+				cmds = []Cmd{kustomizeEdit, kustomizeBuild, kubectlApply}
 			case Plan:
-				return []Cmd{kustomizeEdit, kustomizeBuild, kubectlDiff}, nil
+				cmds = []Cmd{kustomizeEdit, kustomizeBuild, kubectlDiff}
 			default:
 				return nil, fmt.Errorf("unsupported target: %v", t)
+			}
+
+			if c.Kustomize.Git.Repo != "" {
+				setImageAndDiffOrApply, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, cmds, false)
+				if err != nil {
+					return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
+				}
+				return setImageAndDiffOrApply, nil
+			} else {
+				return cmds, nil
 			}
 		} else {
 			return nil, fmt.Errorf("unsupported kustomize strategy: %s", c.Kustomize.Strategy)

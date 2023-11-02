@@ -469,9 +469,6 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 		tmpFile := filepath.Join(g.TempDir, "kustomize-built.yaml")
 
 		kustomizeBuildArgs := NewArgs("build", "--output="+tmpFile)
-		if c.Path != "" {
-			kustomizeBuildArgs = kustomizeBuildArgs.Append(c.Path)
-		}
 
 		kustomizeBuild := Cmd{
 			Name: "kustomize",

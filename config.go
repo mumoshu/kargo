@@ -83,8 +83,9 @@ type Kustomize struct {
 }
 
 type KustomizeGit struct {
-	Repo string `yaml:"repo" kargo:""`
-	Path string `yaml:"path" kargo:""`
+	Repo   string `yaml:"repo" kargo:""`
+	Branch string `yaml:"branch" kargo:""`
+	Path   string `yaml:"path" kargo:""`
 }
 
 type KustomizeImages []KustomizeImage
@@ -139,7 +140,13 @@ func (s Set) KargoValue(get GetValue) (string, error) {
 }
 
 type ArgoCD struct {
-	Repo     string `yaml:"repo" kargo:""`
+	Repo string `yaml:"repo" kargo:""`
+	// Branch is the branch to be used for the deployment.
+	// This isn't part of the arguments for argocd-repo-add because
+	// it doesn't support branch.
+	// However, we use it when you want to push manifests to a branch
+	// and trigger a deployment.
+	Branch   string `yaml:"branch" kargo:""`
 	RepoFrom string `yaml:"repoFrom" kargo:""`
 
 	RepoSSHPrivateKeyPath     string `yaml:"repoSSHPrivateKeyPath" kargo:""`

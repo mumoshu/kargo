@@ -254,7 +254,7 @@ func (g *Generator) cmdsArgoCD(c *Config, t Target) ([]Cmd, error) {
 	}
 
 	if push {
-		g, err := g.gitOps(t, c.Name, c.ArgoCD.Repo, c.ArgoCD.Upload, nil, true)
+		g, err := g.gitOps(t, c.Name, c.ArgoCD.Repo, c.ArgoCD.Branch, c.ArgoCD.Upload, nil, true)
 		if err != nil {
 			return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 		}
@@ -494,7 +494,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			if c.Kustomize.Git.Repo == "" {
 				return nil, fmt.Errorf("kustomize.git.repo is required for kustomize.strategy=%s", KustomizeStrategySetImageAndCreatePR)
 			}
-			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, []Cmd{kustomizeEdit}, true)
+			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, nil, []Cmd{kustomizeEdit}, true)
 			if err != nil {
 				return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 			}
@@ -511,7 +511,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			}
 
 			if c.Kustomize.Git.Repo != "" {
-				setImageAndDiffOrApply, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, nil, cmds, false)
+				setImageAndDiffOrApply, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, nil, cmds, false)
 				if err != nil {
 					return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 				}

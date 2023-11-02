@@ -19,7 +19,7 @@ import (
 // - and git-push the changes.
 // The commands are generated in such a way that they can be
 // used to plan or apply the deployment in a gitops environment.
-func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileModCmds []Cmd, doPR bool) ([]Cmd, error) {
+func (g *Generator) gitOps(t Target, name, repo, branch string, copies []Upload, fileModCmds []Cmd, doPR bool) ([]Cmd, error) {
 	if t == Apply && len(g.ToolsCommand) == 0 {
 		return nil, errors.New("ToolsCommand is required to run kargo tools")
 	}
@@ -49,6 +49,9 @@ func (g *Generator) gitOps(t Target, name, repo string, copies []Upload, fileMod
 	branchName := "kargo-" + datetime
 
 	baseBranch := "main"
+	if branch != "" {
+		baseBranch = branch
+	}
 	script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", remoteName, "&&", "git", "stash", "&&", "git", "checkout", "-b", branchName, remoteName+"/"+baseBranch, "&&", "git", "rebase", remoteName+"/"+baseBranch, ")")
 
 	runGitCheckoutScript := Cmd{

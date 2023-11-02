@@ -417,17 +417,30 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			chart = c.Helm.Chart
 		}
 
+		if chart == "" {
+			// If we have Path set and Chart unset, we treat Path as a path to a local chart
+			chart = "."
+		}
+
 		// Note that helm-diff-upgrate flags are superset of helm-upgrade flags
 		helmUpgradeArgs := NewArgs("upgrade", "--install", c.Name, chart, args)
 
 		switch t {
 		case Apply:
-			helmUpgrade := Cmd{Name: "helm", Args: helmUpgradeArgs}
+			helmUpgrade := Cmd{
+				Name: "helm",
+				Args: helmUpgradeArgs,
+				Dir:  c.Path,
+			}
 			cmds = append(cmds, helmUpgrade)
 			return cmds, nil
 		case Plan:
 			helmDiffArgs := NewArgs("diff", helmUpgradeArgs)
-			helmDiff := Cmd{Name: "helm", Args: helmDiffArgs}
+			helmDiff := Cmd{
+				Name: "helm",
+				Args: helmDiffArgs,
+				Dir:  c.Path,
+			}
 			cmds = append(cmds, helmDiff)
 			return cmds, nil
 		}

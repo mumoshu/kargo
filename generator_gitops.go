@@ -46,7 +46,10 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		return t.Format("20060102150405")
 	}
 	datetime := formatDateTime(time.Now())
-	branchName := "kargo-" + datetime
+	if g.ToolName == "" {
+		return nil, errors.New("ToolName is required to use GitOps support")
+	}
+	branchName := g.ToolName + "-" + datetime
 
 	baseBranch := "main"
 	if branch != "" {
@@ -90,14 +93,23 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 	gitAddArgs = gitAddArgs.Append("git", "add", ".")
 	runGitAddScript := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitAddArgs))}
 
-	var gitCommitPushArgs *Args
-	gitCommitPushArgs = gitCommitPushArgs.Append(
+	var gitCommitArgs *Args
+	gitCommitArgs = gitCommitArgs.Append(
 		"cd", localRepoDir, ";",
 	)
-	gitCommitPushArgs = gitCommitPushArgs.Append(
-		"git", "commit", "-m", "'automated commit'", "&&", "git push", remoteName, branchName,
+	gitCommitArgs = gitCommitArgs.Append(
+		"git", "commit", "-m", "'automated commit'",
 	)
-	gitCommitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitCommitPushArgs))}
+	gitCommit := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitCommitArgs))}
+
+	var gitPushArgs *Args
+	gitPushArgs = gitPushArgs.Append(
+		"cd", localRepoDir, ";",
+	)
+	gitPushArgs = gitPushArgs.Append(
+		"git", "push", remoteName, branchName,
+	)
+	gitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitPushArgs))}
 
 	// var gitDiffArgs *Args
 	// gitDiffArgs = gitDiffArgs.Append(
@@ -112,6 +124,7 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 	cmds = append(cmds, fileCopies...)
 	cmds = append(cmds, runFileModScript)
 	cmds = append(cmds, runGitAddScript)
+	cmds = append(cmds, gitCommit)
 
 	if !doPR {
 		return cmds, nil
@@ -140,7 +153,7 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		Args:   NewArgs(toolArgs),
 		AddEnv: map[string]string{tokenEnv: githubToken},
 	}
-	cmds = append(cmds, gitCommitPush, kargoToolsCreatePullRequest)
+	cmds = append(cmds, gitPush, kargoToolsCreatePullRequest)
 
 	return cmds, nil
 }

@@ -33,6 +33,10 @@ type Generator struct {
 	// If this is not set and kargo required to run a tool,
 	// kargo will return an error.
 	ToolsCommand []string
+
+	// ToolName is the name of the tool to be used for gitops.
+	// It becomes the prefix of the branch name to be created.
+	ToolName string
 }
 
 type Target int

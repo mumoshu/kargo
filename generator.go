@@ -495,7 +495,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			if c.Kustomize.Git.Repo == "" {
 				return nil, fmt.Errorf("kustomize.git.repo is required for kustomize.strategy=%s", KustomizeStrategySetImageAndCreatePR)
 			}
-			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, c.Kustomize.Git.Path, nil, []Cmd{kustomizeEdit}, true)
+			setImageAndCreatePR, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, c.Kustomize.Git.Path, nil, []Cmd{kustomizeEdit}, t == Apply)
 			if err != nil {
 				return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 			}
@@ -512,7 +512,7 @@ func (g *Generator) cmds(c *Config, t Target) ([]Cmd, error) {
 			}
 
 			if c.Kustomize.Git.Repo != "" {
-				setImageAndDiffOrApply, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, c.Kustomize.Git.Path, nil, cmds, false)
+				setImageAndDiffOrApply, err := g.gitOps(t, c.Name, c.Kustomize.Git.Repo, c.Kustomize.Git.Branch, c.Kustomize.Git.Path, nil, cmds, t == Apply)
 				if err != nil {
 					return nil, fmt.Errorf("uanble to generate gitops commands: %w", err)
 				}

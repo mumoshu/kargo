@@ -126,10 +126,6 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 	cmds = append(cmds, runGitAddScript)
 	cmds = append(cmds, gitCommit)
 
-	if !doPR {
-		return cmds, nil
-	}
-
 	tokenEnv := "KARGO_TOOLS_GITHUB_TOKEN"
 	var toolArgs []string
 	toolArgs = append(toolArgs, g.ToolsCommand[1:]...)
@@ -141,9 +137,13 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		"--"+tools.FlagCreatePullRequestBase, baseBranch,
 		"--"+tools.FlagCreatePullRequestTokenEnv, tokenEnv,
 	)
-	if os.Getenv("KANVAS_DRY_RUN") == "true" || t == Plan {
+
+	if os.Getenv("KANVAS_DRY_RUN") == "true" || t == Plan || !doPR {
 		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestDryRun, "true")
+	} else {
+		cmds = append(cmds, gitPush)
 	}
+
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
 		return nil, fmt.Errorf("unable to generate gitops commands: %s is required", "GITHUB_TOKEN")
@@ -153,7 +153,7 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		Args:   NewArgs(toolArgs),
 		AddEnv: map[string]string{tokenEnv: githubToken},
 	}
-	cmds = append(cmds, gitPush, kargoToolsCreatePullRequest)
+	cmds = append(cmds, kargoToolsCreatePullRequest)
 
 	return cmds, nil
 }

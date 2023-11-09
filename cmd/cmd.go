@@ -6,7 +6,11 @@ type Option func(*kargo.Cmd)
 
 func Args(args ...interface{}) Option {
 	return func(c *kargo.Cmd) {
-		c.Args = kargo.NewArgs(args...)
+		if c.Args == nil {
+			c.Args = kargo.NewArgs(args...)
+		} else {
+			c.Args = c.Args.Append(args...)
+		}
 	}
 }
 

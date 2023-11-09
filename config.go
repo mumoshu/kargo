@@ -104,6 +104,9 @@ func (i KustomizeImages) KargoAppendArgs(args *Args, key string) (*Args, error) 
 		} else if img.NewDigestFrom != "" {
 			s = s.AppendStrings("@")
 			s = s.AppendValueFromOutput(img.NewDigestFrom)
+		} else if img.NewTagFrom != "" {
+			s = s.AppendStrings(":")
+			s = s.AppendValueFromOutput(img.NewTagFrom)
 		} else {
 			return nil, fmt.Errorf("either newTag or newDigestFrom must be set")
 		}
@@ -124,6 +127,7 @@ type KustomizeImage struct {
 	Name          string `yaml:"name"`
 	NewName       string `yaml:"newName"`
 	NewTag        string `yaml:"newTag"`
+	NewTagFrom    string `yaml:"newTagFrom"`
 	NewDigestFrom string `yaml:"newDigestFrom"`
 }
 

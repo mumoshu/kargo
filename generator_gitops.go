@@ -5,10 +5,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mumoshu/kargo/tools"
 )
+
+type PullRequestOptions struct {
+	// AssigneeIDs is the list of GitHub user IDs to assign to the pull request.
+	// Each ID can be either an integer or a string.
+	AssigneeIDs []string
+}
 
 // gitOps generates a series of commands to:
 // - git-clone the repo,
@@ -19,7 +26,7 @@ import (
 // - and git-push the changes.
 // The commands are generated in such a way that they can be
 // used to plan or apply the deployment in a gitops environment.
-func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []Upload, fileModCmds []Cmd, doPR bool) ([]Cmd, error) {
+func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []Upload, fileModCmds []Cmd, doPR bool, prOpts PullRequestOptions) ([]Cmd, error) {
 	if t == Apply && len(g.ToolsCommand) == 0 {
 		return nil, errors.New("ToolsCommand is required to run kargo tools")
 	}
@@ -137,6 +144,10 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		"--"+tools.FlagCreatePullRequestBase, baseBranch,
 		"--"+tools.FlagCreatePullRequestTokenEnv, tokenEnv,
 	)
+
+	if len(prOpts.AssigneeIDs) > 0 {
+		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestAssigneeIDs, strings.Join(prOpts.AssigneeIDs, ","))
+	}
 
 	if os.Getenv("KANVAS_DRY_RUN") == "true" || t == Plan || !doPR {
 		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestDryRun, "true")

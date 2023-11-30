@@ -12,24 +12,28 @@ import (
 )
 
 const (
-	CommandCreatePullRequest      = "create-pullrequest"
-	FlagCreatePullRequestDir      = "dir"
-	FlagCreatePullRequestTitle    = "title"
-	FlagCreatePullRequestBody     = "body"
-	FlagCreatePullRequestHead     = "head"
-	FlagCreatePullRequestBase     = "base"
-	FlagCreatePullRequestTokenEnv = "token-env"
-	FlagCreatePullRequestDryRun   = "dry-run"
+	CommandCreatePullRequest         = "create-pullrequest"
+	FlagCreatePullRequestDir         = "dir"
+	FlagCreatePullRequestTitle       = "title"
+	FlagCreatePullRequestBody        = "body"
+	FlagCreatePullRequestHead        = "head"
+	FlagCreatePullRequestBase        = "base"
+	FlagCreatePullRequestAssigneeIDs = "assignee-ids"
+	FlagCreatePullRequestTokenEnv    = "token-env"
+	FlagCreatePullRequestDryRun      = "dry-run"
 )
 
 type CreatePullRequestOptions struct {
-	Dir      string
-	Title    string
-	Body     string
-	Head     string
-	Base     string
-	TokenEnv string
-	DryRun   bool
+	Dir   string
+	Title string
+	Body  string
+	Head  string
+	Base  string
+	// AssigneeIDs is the list of GitHub user IDs to assign to the pull request.
+	// Each ID can be either an integer or a string.
+	AssigneeIDs []string
+	TokenEnv    string
+	DryRun      bool
 }
 
 // PullRequest is a pull request on GitHub that
@@ -112,7 +116,14 @@ func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (*Pul
 	}
 
 	if pr == nil {
-		return nil, fmt.Errorf("Assertion error: pull request is nil: %v", opts)
+		return nil, fmt.Errorf("assertion error: pull request is nil: %v", opts)
+	}
+
+	if len(opts.AssigneeIDs) > 0 {
+		_, _, err = client.Issues.AddAssignees(ctx, repo.Owner, repo.Name, pr.GetNumber(), opts.AssigneeIDs)
+		if err != nil {
+			return nil, fmt.Errorf("calling add assignees API: %w", err)
+		}
 	}
 
 	r := &PullRequest{

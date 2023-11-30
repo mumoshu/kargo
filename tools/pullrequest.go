@@ -32,6 +32,15 @@ type CreatePullRequestOptions struct {
 	DryRun   bool
 }
 
+// PullRequest is a pull request on GitHub that
+// is created by kargo / CreatePullRequest function.
+type PullRequest struct {
+	ID      int64  `json:"id" yaml:"id"`
+	Number  int    `json:"number" yaml:"number"`
+	Head    string `json:"head" yaml:"head"`
+	HTMLURL string `json:"htmlURL" yaml:"htmlURL"`
+}
+
 // CreatePullRequest creates a pull request on GitHub.
 // dir is the directory of the repository.
 // title is the title of the pull request.
@@ -39,8 +48,8 @@ type CreatePullRequestOptions struct {
 // head is the branch to merge from.
 // base is the branch to merge to.
 // token is the GitHub token.
-// It returns the URL of the pull request.
-func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (string, error) {
+// It returns the PullRequest object on success.
+func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (*PullRequest, error) {
 	dir := opts.Dir
 	title := opts.Title
 	body := opts.Body
@@ -50,28 +59,28 @@ func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (stri
 	token := os.Getenv(tokenEnv)
 
 	if token == "" {
-		return "", fmt.Errorf("%s must be set", FlagCreatePullRequestTokenEnv)
+		return nil, fmt.Errorf("%s must be set", FlagCreatePullRequestTokenEnv)
 	}
 
 	if head == "" {
-		return "", fmt.Errorf("head must be set")
+		return nil, fmt.Errorf("head must be set")
 	}
 
 	if base == "" {
-		return "", fmt.Errorf("base must be set")
+		return nil, fmt.Errorf("base must be set")
 	}
 
 	if head == "main" || head == "master" {
-		return "", fmt.Errorf("head must not be %s", head)
+		return nil, fmt.Errorf("head must not be %s", head)
 	}
 
 	if dir == "" {
-		return "", fmt.Errorf("dir must be set")
+		return nil, fmt.Errorf("dir must be set")
 	}
 
 	repo, err := getRepository(ctx, dir)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if opts.DryRun {
 		fmt.Printf("dry-run: create pull request on %s/%s from %s to %s\n", repo.Owner, repo.Name, head, base)
@@ -82,10 +91,10 @@ func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (stri
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 		if err := c.Run(); err != nil {
-			return "", fmt.Errorf("running git diff: %w", err)
+			return nil, fmt.Errorf("running git diff: %w", err)
 		}
 
-		return "", nil
+		return nil, nil
 	}
 
 	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
@@ -99,9 +108,23 @@ func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (stri
 		Base:  &base,
 	})
 	if err != nil {
-		return "", fmt.Errorf("calling pull request creation API: %w", err)
+		return nil, fmt.Errorf("calling pull request creation API: %w", err)
 	}
-	return pr.GetHTMLURL(), nil
+
+	if pr == nil {
+		return nil, fmt.Errorf("Assertion error: pull request is nil: %v", opts)
+	}
+
+	r := &PullRequest{
+		ID:      pr.GetID(),
+		Number:  pr.GetNumber(),
+		HTMLURL: pr.GetHTMLURL(),
+	}
+	if h := pr.GetHead(); h != nil {
+		r.Head = h.GetRef()
+	}
+
+	return r, nil
 }
 
 type Repository struct {

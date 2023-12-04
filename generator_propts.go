@@ -25,3 +25,11 @@ func (g *Generator) prOptsFromEnv() PullRequestOptions {
 	}
 	return opts
 }
+
+func (g *Generator) prHeadFromEnv() string {
+	env := strings.ToUpper(g.ToolName) + "_PULLREQUEST_HEAD"
+	if v := os.Getenv(env); v != "" {
+		return v
+	}
+	return ""
+}

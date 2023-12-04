@@ -26,7 +26,7 @@ type PullRequestOptions struct {
 // - and git-push the changes.
 // The commands are generated in such a way that they can be
 // used to plan or apply the deployment in a gitops environment.
-func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []Upload, fileModCmds []Cmd, doPR bool, prOpts PullRequestOptions) ([]Cmd, error) {
+func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copies []Upload, fileModCmds []Cmd, doPR bool, prOpts PullRequestOptions) ([]Cmd, error) {
 	if t == Apply && len(g.ToolsCommand) == 0 {
 		return nil, errors.New("ToolsCommand is required to run kargo tools")
 	}
@@ -53,16 +53,19 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		return t.Format("20060102150405")
 	}
 	datetime := formatDateTime(time.Now())
-	if g.ToolName == "" {
-		return nil, errors.New("ToolName is required to use GitOps support")
+
+	if head == "" {
+		if g.ToolName == "" {
+			return nil, errors.New("ToolName is required to use GitOps support")
+		}
+		head = g.ToolName + "-" + datetime
 	}
-	branchName := g.ToolName + "-" + datetime
 
 	baseBranch := "main"
 	if branch != "" {
 		baseBranch = branch
 	}
-	script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", remoteName, "&&", "git", "stash", "&&", "git", "checkout", "-b", branchName, remoteName+"/"+baseBranch, "&&", "git", "rebase", remoteName+"/"+baseBranch, ")")
+	script = script.Append("(", "cd", localRepoDir, "&&", "git", "fetch", remoteName, "&&", "git", "stash", "&&", "git", "checkout", "-b", head, remoteName+"/"+baseBranch, "&&", "git", "rebase", remoteName+"/"+baseBranch, ")")
 
 	runGitCheckoutScript := Cmd{
 		Name: "bash",
@@ -114,7 +117,7 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		"cd", localRepoDir, ";",
 	)
 	gitPushArgs = gitPushArgs.Append(
-		"git", "push", remoteName, branchName,
+		"git", "push", remoteName, head,
 	)
 	gitPush := Cmd{Name: "bash", Args: NewArgs("-vxc", NewBashScript(gitPushArgs))}
 
@@ -140,7 +143,7 @@ func (g *Generator) gitOps(t Target, name, repo, branch, path string, copies []U
 		"--"+tools.FlagCreatePullRequestDir, localRepoDir,
 		"--"+tools.FlagCreatePullRequestTitle, "Deploy "+name,
 		"--"+tools.FlagCreatePullRequestBody, "Deploy "+name,
-		"--"+tools.FlagCreatePullRequestHead, branchName,
+		"--"+tools.FlagCreatePullRequestHead, head,
 		"--"+tools.FlagCreatePullRequestBase, baseBranch,
 		"--"+tools.FlagCreatePullRequestTokenEnv, tokenEnv,
 	)

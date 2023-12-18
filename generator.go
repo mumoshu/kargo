@@ -38,6 +38,9 @@ type Generator struct {
 	// It becomes the prefix of the branch name to be created,
 	// and the prefix of the environment variable name to be used.
 	ToolName string
+
+	// PullRequestOutputFile is the path to the file to write the pull request info to.
+	PullRequestOutputFile string
 }
 
 type Target int

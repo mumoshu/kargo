@@ -15,6 +15,9 @@ type PullRequestOptions struct {
 	// AssigneeIDs is the list of GitHub user IDs to assign to the pull request.
 	// Each ID can be either an integer or a string.
 	AssigneeIDs []string
+
+	// OutputFile is the path to the file to write the pull request info to.
+	OutputFile string
 }
 
 // gitOps generates a series of commands to:
@@ -150,6 +153,10 @@ func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copi
 
 	if len(prOpts.AssigneeIDs) > 0 {
 		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestAssigneeIDs, strings.Join(prOpts.AssigneeIDs, ","))
+	}
+
+	if prOpts.OutputFile != "" {
+		toolArgs = append(toolArgs, "--"+tools.FlagCreatePullRequestOutputFile, prOpts.OutputFile)
 	}
 
 	if os.Getenv("KANVAS_DRY_RUN") == "true" || t == Plan || !doPR {

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,6 +22,7 @@ const (
 	FlagCreatePullRequestAssigneeIDs = "assignee-ids"
 	FlagCreatePullRequestTokenEnv    = "token-env"
 	FlagCreatePullRequestDryRun      = "dry-run"
+	FlagCreatePullRequestOutputFile  = "output-file"
 )
 
 type CreatePullRequestOptions struct {
@@ -29,6 +31,8 @@ type CreatePullRequestOptions struct {
 	Body  string
 	Head  string
 	Base  string
+	// OutputFile is the path to the file to write the pull request info to.
+	OutputFile string
 	// AssigneeIDs is the list of GitHub user IDs to assign to the pull request.
 	// Each ID can be either an integer or a string.
 	AssigneeIDs []string
@@ -40,6 +44,7 @@ type CreatePullRequestOptions struct {
 // is created by kargo / CreatePullRequest function.
 type PullRequest struct {
 	ID      int64  `json:"id" yaml:"id"`
+	NodeID  string `json:"nodeID" yaml:"nodeID"`
 	Number  int    `json:"number" yaml:"number"`
 	Head    string `json:"head" yaml:"head"`
 	HTMLURL string `json:"htmlURL" yaml:"htmlURL"`
@@ -128,11 +133,28 @@ func CreatePullRequest(ctx context.Context, opts CreatePullRequestOptions) (*Pul
 
 	r := &PullRequest{
 		ID:      pr.GetID(),
+		NodeID:  pr.GetNodeID(),
 		Number:  pr.GetNumber(),
 		HTMLURL: pr.GetHTMLURL(),
 	}
 	if h := pr.GetHead(); h != nil {
 		r.Head = h.GetRef()
+	}
+
+	if opts.OutputFile != "" {
+		f, err := os.Create(opts.OutputFile)
+		if err != nil {
+			return nil, fmt.Errorf("creating output file: %w", err)
+		}
+		defer f.Close()
+
+		if err := json.NewEncoder(f).Encode(r); err != nil {
+			return nil, fmt.Errorf("writing output file: %w", err)
+		}
+
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("closing output file: %w", err)
+		}
 	}
 
 	return r, nil

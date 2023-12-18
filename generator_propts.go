@@ -23,6 +23,11 @@ func (g *Generator) prOptsFromEnv() PullRequestOptions {
 	if v := os.Getenv(env); v != "" {
 		opts.AssigneeIDs = strings.Split(v, ",")
 	}
+
+	if opts.OutputFile == "" {
+		opts.OutputFile = g.PullRequestOutputFile
+	}
+
 	return opts
 }
 

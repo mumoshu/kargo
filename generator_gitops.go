@@ -38,6 +38,11 @@ func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copi
 		return nil, errors.New("TempDir is required to use GitOps support")
 	}
 
+	repo, err := normalizeRepo(repo, os.Getenv("GITHUB_TOKEN"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize repo: %w", err)
+	}
+
 	const (
 		remoteName = "origin"
 	)
@@ -177,4 +182,35 @@ func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copi
 	cmds = append(cmds, kargoToolsCreatePullRequest)
 
 	return cmds, nil
+}
+
+func validateRepo(repo string) error {
+	http := strings.HasPrefix(repo, "http://")
+	https := strings.HasPrefix(repo, "https://")
+	git := !http && !https && strings.Contains(repo, ":")
+
+	if !http && !https && !git {
+		return fmt.Errorf("either http(s):// or host:owner/repo.git format is required for repo, but got %s", repo)
+	}
+
+	return nil
+}
+
+func normalizeRepo(repo, token string) (string, error) {
+	https := strings.HasPrefix(repo, "https://")
+
+	if err := validateRepo(repo); err != nil {
+		return "", err
+	}
+
+	if token == "" {
+		return repo, nil
+	}
+
+	if https && token != "" {
+		// Use GITHUB_TOKEN if available for git clone
+		repo = strings.Replace(repo, "https://", fmt.Sprintf("https://kargo:%s@", token), 1)
+	}
+
+	return repo, nil
 }

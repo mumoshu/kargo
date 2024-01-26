@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -180,14 +181,35 @@ func getRepository(ctx context.Context, dir string) (*Repository, error) {
 // parseRepository parses the GitHub repository from the output of
 // git remote get-url.
 func parseRepository(gitRemoteGetURLOut []byte) (*Repository, error) {
-	s := strings.Split(string(gitRemoteGetURLOut), ":")
-	if len(s) != 2 {
-		return nil, fmt.Errorf("expected 2 parts but got %d", len(s))
+	o := strings.TrimSpace(string(gitRemoteGetURLOut))
+
+	u, err := url.Parse(o)
+	if err != nil {
+		s := strings.Split(string(gitRemoteGetURLOut), ":")
+		if len(s) != 2 {
+			return nil, fmt.Errorf("expected 2 parts but got %d", len(s))
+		}
+
+		s = strings.Split(strings.TrimSuffix(s[1], "\n"), "/")
+		if len(s) != 2 {
+			return nil, fmt.Errorf("expected 2 parts but got %d", len(s))
+		}
+
+		return &Repository{
+			Owner: s[0],
+			Name:  strings.TrimSuffix(s[1], ".git"),
+		}, nil
 	}
 
-	s = strings.Split(strings.TrimSuffix(s[1], "\n"), "/")
+	if u.Scheme != "https" {
+		return nil, fmt.Errorf("expected https scheme but got %s", u.Scheme)
+	}
+
+	p := strings.TrimLeft(u.Path, "/")
+
+	s := strings.Split(p, "/")
 	if len(s) != 2 {
-		return nil, fmt.Errorf("expected 2 parts but got %d", len(s))
+		return nil, fmt.Errorf("expected 2 parts in url path but got %d: %s", len(s), p)
 	}
 
 	return &Repository{

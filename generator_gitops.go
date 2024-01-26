@@ -18,6 +18,12 @@ type PullRequestOptions struct {
 
 	// OutputFile is the path to the file to write the pull request info to.
 	OutputFile string
+
+	// GitUserName is the name of the user to use for git commits.
+	GitUserName string
+
+	// GitUserEmail is the email of the user to use for git commits.
+	GitUserEmail string
 }
 
 // gitOps generates a series of commands to:
@@ -115,6 +121,16 @@ func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copi
 	gitCommitArgs = gitCommitArgs.Append(
 		"cd", localRepoDir, ";",
 	)
+	if prOpts.GitUserName != "" {
+		gitCommitArgs = gitCommitArgs.Append(
+			"git", "config", "user.name", prOpts.GitUserName, ";",
+		)
+	}
+	if prOpts.GitUserEmail != "" {
+		gitCommitArgs = gitCommitArgs.Append(
+			"git", "config", "user.email", prOpts.GitUserEmail, ";",
+		)
+	}
 	gitCommitArgs = gitCommitArgs.Append(
 		"git", "commit", "-m", "'automated commit'",
 	)

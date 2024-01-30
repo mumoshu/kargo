@@ -130,6 +130,12 @@ func (g *Generator) gitOps(t Target, name, repo, branch, head, path string, copi
 		gitCommitArgs = gitCommitArgs.Append(
 			"git", "config", "user.email", prOpts.GitUserEmail, ";",
 		)
+	} else {
+		// We need to set user.email to an empty string anyway to avoid:
+		//   fatal: unable to auto-detect email address (got 'mylinuxuser@myhostname.(none)')
+		gitCommitArgs = gitCommitArgs.Append(
+			"(", "git", "config", "user.email", "||", "git", "config", "user.email", "", ")", ";",
+		)
 	}
 	gitCommitArgs = gitCommitArgs.Append(
 		"git", "commit", "-m", "'automated commit'",
